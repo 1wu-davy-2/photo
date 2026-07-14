@@ -1,0 +1,170 @@
+from __future__ import annotations
+
+from collections.abc import Iterator
+from urllib.parse import quote
+
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile, status
+from fastapi.responses import Response, StreamingResponse
+from sqlalchemy.orm import Session
+
+from ..auth import AuthenticatedUser, require_current_user
+from ..models import Photo
+from ..schemas import PhotoListResponse, PhotoMoveRequest, PhotoRead, PhotoRenameRequest
+from ..services.folders import FolderNotFoundError
+from ..services.photos import PhotoNotFoundError, PhotoService, PhotoValidationError
+
+router = APIRouter(prefix="/photos", tags=["photos"], dependencies=[Depends(require_current_user)])
+
+
+def get_session(request: Request) -> Generator[Session, None, None]:
+    session = request.app.state.session_factory()
+    try:
+        yield session
+    finally:
+        session.close()
+
+
+def get_service(request: Request, session: Session = Depends(get_session)) -> PhotoService:
+    return PhotoService(session, request.app.state.storage, request.app.state.settings)
+
+
+def _stream_object(object_response) -> Iterator[bytes]:
+    try:
+        while chunk := object_response.read(1024 * 1024):
+            yield chunk
+    finally:
+        object_response.close()
+        release_conn = getattr(object_response, "release_conn", None)
+        if release_conn:
+            release_conn()
+
+
+def _photo_response(photo: Photo) -> PhotoRead:
+    return PhotoRead.model_validate(photo)
+
+
+@router.get("", response_model=PhotoListResponse)
+def list_photos(
+    service: PhotoService = Depends(get_service),
+    search: str | None = Query(default=None, max_length=100),
+    sort: str = Query(default="newest", pattern="^(newest|oldest)$"),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=24, ge=1, le=100),
+    scope: str = Query(default="owned", pattern="^(owned|all)$"),
+    current_user: AuthenticatedUser = Depends(require_current_user),
+):
+    if scope == "all" and current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Administrator permission required")
+    owner_id = None if scope == "all" else current_user.id
+    items, total = service.list(search=search, sort=sort, page=page, page_size=page_size, owner_id=owner_id)
+    return PhotoListResponse(items=[_photo_response(item) for item in items], total=total, page=page, page_size=page_size)
+
+
+@router.post("/upload", response_model=PhotoRead, status_code=status.HTTP_201_CREATED)
+async def upload_photo(
+    file: UploadFile = File(...),
+    current_user: AuthenticatedUser = Depends(require_current_user),
+    service: PhotoService = Depends(get_service),
+):
+    try:
+        payload = await file.read()
+        photo = service.upload(
+            owner_id=current_user.id,
+            filename=file.filename or "untitled-image",
+            content_type=file.content_type,
+            payload=payload,
+        )
+        return _photo_response(photo)
+    except PhotoValidationError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+
+
+def _content_response(photo: Photo, service: PhotoService, *, download: bool):
+    try:
+        object_response = service.storage.get_object(photo.object_key)
+    except Exception as error:
+        raise HTTPException(status_code=404, detail="Photo content not found") from error
+    headers = {"Cache-Control": "private, max-age=3600"}
+    if download:
+        headers["Content-Disposition"] = f"attachment; filename*=UTF-8''{quote(photo.original_name)}"
+    return StreamingResponse(_stream_object(object_response), media_type=photo.mime_type, headers=headers)
+
+
+@router.get("/{photo_id}/content")
+def photo_content(
+    photo_id: str,
+    current_user: AuthenticatedUser = Depends(require_current_user),
+    service: PhotoService = Depends(get_service),
+):
+    try:
+        photo = service.get(photo_id, owner_id=None if current_user.role == "admin" else current_user.id)
+    except PhotoNotFoundError as error:
+        raise HTTPException(status_code=404, detail="Photo not found") from error
+    return _content_response(photo, service, download=False)
+
+
+@router.get("/{photo_id}/download")
+def download_photo(
+    photo_id: str,
+    current_user: AuthenticatedUser = Depends(require_current_user),
+    service: PhotoService = Depends(get_service),
+):
+    try:
+        photo = service.get(photo_id, owner_id=None if current_user.role == "admin" else current_user.id)
+    except PhotoNotFoundError as error:
+        raise HTTPException(status_code=404, detail="Photo not found") from error
+    return _content_response(photo, service, download=True)
+
+
+@router.patch("/{photo_id}/folder", response_model=PhotoRead)
+def move_photo(
+    photo_id: str,
+    payload: PhotoMoveRequest,
+    current_user: AuthenticatedUser = Depends(require_current_user),
+    service: PhotoService = Depends(get_service),
+):
+    try:
+        return _photo_response(
+            service.move(
+                photo_id,
+                folder_id=payload.folder_id,
+                owner_id=None if current_user.role == "admin" else current_user.id,
+            )
+        )
+    except (PhotoNotFoundError, FolderNotFoundError) as error:
+        raise HTTPException(status_code=404, detail="Photo or folder not found") from error
+
+
+@router.patch("/{photo_id}/name", response_model=PhotoRead)
+def rename_photo(
+    photo_id: str,
+    payload: PhotoRenameRequest,
+    current_user: AuthenticatedUser = Depends(require_current_user),
+    service: PhotoService = Depends(get_service),
+):
+    try:
+        return _photo_response(
+            service.rename(
+                photo_id,
+                name=payload.name,
+                owner_id=None if current_user.role == "admin" else current_user.id,
+            )
+        )
+    except PhotoNotFoundError as error:
+        raise HTTPException(status_code=404, detail="Photo not found") from error
+
+
+@router.delete("/{photo_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_photo(
+    photo_id: str,
+    scope: str = Query(default="owned", pattern="^(owned|all)$"),
+    current_user: AuthenticatedUser = Depends(require_current_user),
+    service: PhotoService = Depends(get_service),
+):
+    if scope == "all" and current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Administrator permission required")
+    try:
+        service.delete(photo_id, owner_id=None if scope == "all" else current_user.id)
+    except PhotoNotFoundError as error:
+        raise HTTPException(status_code=404, detail="Photo not found") from error
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
