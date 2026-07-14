@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { fetchPhotoBlobUrl } from "./client";
+import { createPhotoWall, fetchPhotoBlobUrl, uploadPhoto } from "./client";
 
 describe("photo content authentication", () => {
   beforeEach(() => {
@@ -15,6 +15,39 @@ describe("photo content authentication", () => {
 
   it("uses the login token explicitly passed to the content request", async () => {
     await fetchPhotoBlobUrl("photo-1", undefined, "login-token");
+
+    const [, init] = vi.mocked(fetch).mock.calls[0];
+    expect(new Headers(init?.headers).get("Authorization")).toBe("Bearer login-token");
+  });
+
+  it("includes the selected folder when uploading a file", async () => {
+    class FakeXHR {
+      static instance: FakeXHR;
+      upload = { addEventListener: vi.fn() };
+      responseType = "";
+      response = { id: "photo-1" };
+      status = 201;
+      headers: Record<string, string> = {};
+      body: FormData | null = null;
+      listeners: Record<string, () => void> = {};
+      open = vi.fn();
+      setRequestHeader = (name: string, value: string) => { this.headers[name] = value; };
+      addEventListener = (name: string, listener: () => void) => { this.listeners[name] = listener; };
+      send = (body: FormData) => { this.body = body; this.listeners.load?.(); };
+      constructor() { FakeXHR.instance = this; }
+    }
+    vi.stubGlobal("XMLHttpRequest", FakeXHR);
+
+    await uploadPhoto(new File(["image"], "photo.png", { type: "image/png" }), () => undefined, "login-token", "folder-1");
+
+    expect(FakeXHR.instance.headers.Authorization).toBe("Bearer login-token");
+    expect(FakeXHR.instance.body?.get("folder_id")).toBe("folder-1");
+  });
+
+  it("creates a photo wall with the authenticated request helper", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ id: "wall-1" }), { status: 201 })));
+
+    await createPhotoWall({ name: "Summer wall", background_color: "#F6FAFF" }, "login-token");
 
     const [, init] = vi.mocked(fetch).mock.calls[0];
     expect(new Headers(init?.headers).get("Authorization")).toBe("Bearer login-token");

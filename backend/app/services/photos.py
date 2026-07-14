@@ -7,11 +7,11 @@ from dataclasses import dataclass
 from io import BytesIO
 
 from PIL import Image, UnidentifiedImageError
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from ..config import Settings
-from ..models import Folder, Photo
+from ..models import Folder, Photo, PhotoWallItem
 from .folders import FolderNotFoundError, FolderService
 
 ALLOWED_MIME_TYPES = {
@@ -64,10 +64,10 @@ def inspect_image(*, filename: str, content_type: str | None, payload: bytes, ma
 
     mime_type = FORMAT_TO_MIME.get(image_format)
     if mime_type not in ALLOWED_MIME_TYPES:
-        guessed_type = content_type or mimetypes.guess_type(filename)[0]
-        if guessed_type not in ALLOWED_MIME_TYPES:
-            raise PhotoValidationError("This image format is not supported")
-        mime_type = guessed_type
+        raise PhotoValidationError("This image format is not supported")
+    declared_type = (content_type or mimetypes.guess_type(filename)[0] or "").split(";", 1)[0].strip().lower()
+    if declared_type and declared_type != mime_type:
+        raise PhotoValidationError("The declared image type does not match the file")
 
     return ImageMetadata(
         mime_type=mime_type,
@@ -96,7 +96,7 @@ class PhotoService:
     def _object_key(folder_id: str, photo_id: str, filename: str) -> str:
         return f"folders/{folder_id}/{photo_id}.{PhotoService._extension(filename)}"
 
-    def upload(self, *, owner_id: str, filename: str, content_type: str | None, payload: bytes) -> Photo:
+    def upload(self, *, owner_id: str, filename: str, content_type: str | None, payload: bytes, folder_id: str | None = None) -> Photo:
         safe_name = self._safe_filename(filename)
         metadata = inspect_image(
             filename=safe_name,
@@ -105,7 +105,12 @@ class PhotoService:
             max_bytes=self.settings.max_upload_size_bytes,
         )
         photo_id = str(uuid.uuid4())
-        folder = self.session.scalar(
+        folder = None
+        if folder_id is not None:
+            folder = self.session.scalar(select(Folder).where(Folder.id == folder_id, Folder.owner_id == owner_id))
+            if folder is None:
+                raise FolderNotFoundError(folder_id)
+        folder = folder or self.session.scalar(
             select(Folder).where(Folder.owner_id == owner_id, Folder.is_default.is_(True))
         ) or FolderService(self.session).ensure_default_folder(owner_id)
         object_key = self._object_key(folder.id, photo_id, safe_name)
@@ -113,7 +118,7 @@ class PhotoService:
             id=photo_id,
             object_key=object_key,
             original_name=safe_name[:255],
-            mime_type=metadata.mime_type,
+        mime_type=metadata.mime_type,
             size_bytes=metadata.size_bytes,
             width=metadata.width,
             height=metadata.height,
@@ -207,5 +212,6 @@ class PhotoService:
     def delete(self, photo_id: str, *, owner_id: str | None = None) -> None:
         photo = self.get(photo_id, owner_id=owner_id)
         self.storage.remove_object(photo.object_key)
+        self.session.execute(delete(PhotoWallItem).where(PhotoWallItem.photo_id == photo.id))
         self.session.delete(photo)
         self.session.commit()

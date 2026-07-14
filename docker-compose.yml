@@ -45,7 +45,7 @@ services:
     profiles: ["local-db"]
     restart: unless-stopped
     environment:
-      MARIADB_DATABASE: ${MARIADB_DATABASE:-photo_gallery}
+      MARIADB_DATABASE: ${MARIADB_DATABASE:-photo}
       MARIADB_USER: ${MARIADB_USER:-photo_user}
       MARIADB_PASSWORD: ${MARIADB_PASSWORD:-change-me}
       MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD:-change-root-me}

@@ -7,18 +7,19 @@ import type { UploadState } from "../types/photo";
 interface UploadDropzoneProps {
   upload: UploadState | null;
   onFiles: (files: FileList | File[]) => void;
+  onDataTransfer?: (dataTransfer: DataTransfer) => void;
   onChooseRef?: (open: () => void) => void;
   t: Translator;
 }
 
-export function UploadDropzone({ upload, onFiles, onChooseRef, t }: UploadDropzoneProps) {
+export function UploadDropzone({ upload, onFiles, onDataTransfer, onChooseRef, t }: UploadDropzoneProps) {
   const [isDragging, setIsDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const openPicker = () => inputRef.current?.click();
   if (onChooseRef) onChooseRef(openPicker);
 
   return (
-    <section className={`upload-zone ${isDragging ? "is-dragging" : ""} ${upload ? "is-uploading" : ""}`} onDragEnter={(event) => { event.preventDefault(); setIsDragging(true); }} onDragOver={(event) => event.preventDefault()} onDragLeave={(event) => { event.preventDefault(); setIsDragging(false); }} onDrop={(event) => { event.preventDefault(); setIsDragging(false); onFiles(event.dataTransfer.files); }} aria-label={t("nav.upload")}>
+    <section className={`upload-zone ${isDragging ? "is-dragging" : ""} ${upload ? "is-uploading" : ""}`} onDragEnter={(event) => { event.preventDefault(); setIsDragging(true); }} onDragOver={(event) => event.preventDefault()} onDragLeave={(event) => { event.preventDefault(); setIsDragging(false); }} onDrop={(event) => { event.preventDefault(); setIsDragging(false); onDataTransfer ? onDataTransfer(event.dataTransfer) : onFiles(event.dataTransfer.files); }} aria-label={t("nav.upload")}>
       <input ref={inputRef} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/avif" onChange={(event) => event.target.files && onFiles(event.target.files)} />
       {upload ? (
         <div className="upload-progress"><div className="upload-progress-icon"><LoaderCircle className="spin" size={21} /></div><div className="upload-progress-copy"><strong>{t("gallery.uploadProgress")} {upload.name}</strong><span>{t("gallery.uploadSupport")}</span></div><strong className="upload-percent">{upload.progress}%</strong><div className="progress-track"><span style={{ width: `${upload.progress}%` }} /></div></div>

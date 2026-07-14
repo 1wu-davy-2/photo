@@ -8,6 +8,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from .api.auth import router as auth_router
 from .api.folders import router as folders_router
 from .api.photos import router as photos_router
+from .api.photo_walls import public_router as photo_wall_shares_router
+from .api.photo_walls import router as photo_walls_router
 from .api.users import router as users_router
 from .auth import AuthService
 from .config import Settings
@@ -70,6 +72,8 @@ def create_app(*, settings: Settings | None = None, session_factory=None, storag
     app.include_router(users_router, prefix="/api")
     app.include_router(folders_router, prefix="/api")
     app.include_router(photos_router, prefix="/api")
+    app.include_router(photo_walls_router, prefix="/api")
+    app.include_router(photo_wall_shares_router, prefix="/api")
     return app
 
 

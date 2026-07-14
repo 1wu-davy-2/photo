@@ -41,3 +41,29 @@ export interface UploadState {
   name: string;
   progress: number;
 }
+
+export interface PhotoWallItem {
+  id: string;
+  photo: Photo;
+  x: number;
+  y: number;
+  width: number;
+  rotation: number;
+  z_index: number;
+}
+
+export interface PhotoWall {
+  id: string;
+  owner_id: string;
+  name: string;
+  background_color: string;
+  created_at: string;
+  updated_at: string;
+  items: PhotoWallItem[];
+}
+
+export interface PhotoWallShare {
+  token: string;
+  path: string;
+  is_active: boolean;
+}

@@ -44,3 +44,19 @@ def test_photo_api_rejects_missing_photo_content(test_app):
         response = client.get("/api/photos/not-found/content", headers=headers)
 
     assert response.status_code == 404
+
+
+def test_photo_upload_can_target_a_selected_folder(test_app, image_bytes):
+    with TestClient(test_app) as client:
+        headers = auth_headers(client)
+        folder = client.post("/api/folders", headers=headers, json={"name": "Trips"})
+        uploaded = client.post(
+            "/api/photos/upload",
+            headers=headers,
+            data={"folder_id": folder.json()["id"]},
+            files={"file": ("trip.png", image_bytes, "image/png")},
+        )
+
+    assert folder.status_code == 201
+    assert uploaded.status_code == 201
+    assert uploaded.json()["folder_id"] == folder.json()["id"]

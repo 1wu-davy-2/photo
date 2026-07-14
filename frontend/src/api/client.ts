@@ -1,4 +1,4 @@
-import type { Folder, ManagedUser, Photo, PhotoListResponse, SortOrder } from "../types/photo";
+import type { Folder, ManagedUser, Photo, PhotoListResponse, PhotoWall, PhotoWallShare, SortOrder } from "../types/photo";
 import { clearSession, getAccessToken, type AuthSession } from "../auth/session";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "";
@@ -51,7 +51,7 @@ export function listPhotos(search: string, sort: SortOrder, scope: "owned" | "al
   return request<PhotoListResponse>(`/api/photos?${query.toString()}`, undefined, accessToken);
 }
 
-export function uploadPhoto(file: File, onProgress: (progress: number) => void, accessToken?: string): Promise<Photo> {
+export function uploadPhoto(file: File, onProgress: (progress: number) => void, accessToken?: string, folderId?: string): Promise<Photo> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open("POST", `${API_BASE}/api/photos/upload`);
@@ -76,6 +76,7 @@ export function uploadPhoto(file: File, onProgress: (progress: number) => void, 
     xhr.addEventListener("error", () => reject(new Error("Upload could not reach the archive")));
     const body = new FormData();
     body.append("file", file);
+    if (folderId) body.append("folder_id", folderId);
     xhr.send(body);
   });
 }
@@ -152,4 +153,38 @@ export async function downloadPhoto(id: string, filename: string, accessToken?: 
   anchor.click();
   anchor.remove();
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+export function listPhotoWalls(accessToken?: string): Promise<PhotoWall[]> {
+  return request<PhotoWall[]>("/api/photo-walls", undefined, accessToken);
+}
+
+export function createPhotoWall(payload: { name: string; background_color?: string }, accessToken?: string): Promise<PhotoWall> {
+  return request<PhotoWall>("/api/photo-walls", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) }, accessToken);
+}
+
+export function getPhotoWall(id: string, accessToken?: string): Promise<PhotoWall> {
+  return request<PhotoWall>(`/api/photo-walls/${id}`, undefined, accessToken);
+}
+
+export function updatePhotoWall(id: string, payload: { name?: string; background_color?: string }, accessToken?: string): Promise<PhotoWall> {
+  return request<PhotoWall>(`/api/photo-walls/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) }, accessToken);
+}
+
+export function savePhotoWallLayout(id: string, items: Array<{ photo_id: string; x: number; y: number; width: number; rotation: number; z_index: number }>, accessToken?: string): Promise<PhotoWall> {
+  return request<PhotoWall>(`/api/photo-walls/${id}/layout`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ items }) }, accessToken);
+}
+
+export function createPhotoWallShare(id: string, accessToken?: string): Promise<PhotoWallShare> {
+  return request<PhotoWallShare>(`/api/photo-walls/${id}/share`, { method: "POST" }, accessToken);
+}
+
+export function fetchPublicPhotoWall(token: string): Promise<PhotoWall> {
+  return request<PhotoWall>(`/api/photo-wall-shares/${encodeURIComponent(token)}`);
+}
+
+export async function fetchPublicPhotoWallPhotoBlobUrl(token: string, photoId: string, signal?: AbortSignal): Promise<string> {
+  const response = await fetch(`${API_BASE}/api/photo-wall-shares/${encodeURIComponent(token)}/photos/${encodeURIComponent(photoId)}/content`, withAuth({ signal }));
+  if (!response.ok) throw new Error("Shared photo content could not be loaded");
+  return URL.createObjectURL(await response.blob());
 }

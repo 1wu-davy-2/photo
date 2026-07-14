@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile, status
 from fastapi.responses import Response, StreamingResponse
 from sqlalchemy.orm import Session
 
@@ -14,6 +14,20 @@ from ..services.folders import FolderNotFoundError
 from ..services.photos import PhotoNotFoundError, PhotoService, PhotoValidationError
 
 router = APIRouter(prefix="/photos", tags=["photos"], dependencies=[Depends(require_current_user)])
+
+
+async def _read_upload_with_limit(file: UploadFile, *, max_bytes: int) -> bytes:
+    chunks: list[bytes] = []
+    total = 0
+    while total <= max_bytes:
+        chunk = await file.read(min(1024 * 1024, max_bytes - total + 1))
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > max_bytes:
+            raise PhotoValidationError("The uploaded file is too large")
+        chunks.append(chunk)
+    return b"".join(chunks)
 
 
 def get_session(request: Request) -> Generator[Session, None, None]:
@@ -63,19 +77,21 @@ def list_photos(
 @router.post("/upload", response_model=PhotoRead, status_code=status.HTTP_201_CREATED)
 async def upload_photo(
     file: UploadFile = File(...),
+    folder_id: str | None = Form(default=None),
     current_user: AuthenticatedUser = Depends(require_current_user),
     service: PhotoService = Depends(get_service),
 ):
     try:
-        payload = await file.read()
+        payload = await _read_upload_with_limit(file, max_bytes=service.settings.max_upload_size_bytes)
         photo = service.upload(
             owner_id=current_user.id,
             filename=file.filename or "untitled-image",
             content_type=file.content_type,
             payload=payload,
+            folder_id=folder_id,
         )
         return _photo_response(photo)
-    except PhotoValidationError as error:
+    except (PhotoValidationError, FolderNotFoundError) as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
 
 

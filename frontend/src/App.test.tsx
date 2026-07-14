@@ -27,6 +27,7 @@ describe("Photo Gallery dashboard", () => {
       if (String(input).includes("/api/auth/login")) {
         return Promise.resolve(jsonResponse({ access_token: "token", token_type: "bearer", expires_in: 3600, expires_at: Math.floor(Date.now() / 1000) + 3600, user: { username: "admin", role: "admin" } }));
       }
+      if (String(input).includes("/api/folders")) return Promise.resolve(jsonResponse([]));
       return Promise.resolve(jsonResponse({ items: [], total: 0, page: 1, page_size: 48 }));
     }));
     render(<App />);
@@ -55,6 +56,7 @@ describe("Photo Gallery dashboard", () => {
       if (String(input).includes("/api/auth/login")) {
         return Promise.resolve(jsonResponse({ access_token: "token", token_type: "bearer", expires_in: 3600, expires_at: Math.floor(Date.now() / 1000) + 3600, user: { username: "admin", role: "admin" } }));
       }
+      if (String(input).includes("/api/folders")) return Promise.resolve(jsonResponse([]));
       if (String(input).includes("/api/photos?")) return Promise.resolve(jsonResponse({ items: [photo], total: 1, page: 1, page_size: 48 }));
       return Promise.resolve(new Response(new Blob(["image"]), { status: 200, headers: { "Content-Type": "image/jpeg" } }));
     }));
@@ -90,6 +92,7 @@ describe("Photo Gallery dashboard", () => {
       const url = String(input);
       calls.push({ url, init });
       if (url.includes("/api/auth/login")) return loginResponse;
+      if (url.includes("/api/folders")) return Promise.resolve(jsonResponse([]));
       if (url.includes("/api/photos?")) return Promise.resolve(jsonResponse({ items: [photo], total: 1, page: 1, page_size: 24 }));
       if (url.includes("/api/photos/photo-auth-order/content")) return Promise.resolve(new Response(new Blob(["image"]), { status: 200, headers: { "Content-Type": "image/jpeg" } }));
       return Promise.reject(new Error(`Unexpected request: ${url}`));
