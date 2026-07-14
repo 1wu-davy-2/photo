@@ -137,7 +137,7 @@ function App() {
   const changeRoute = (nextRoute: AppRoute) => { navigate(nextRoute); setRoute(nextRoute); };
   const logout = () => { clearSession(); setSession(null); changeRoute("home"); };
   const handleGlobalDrop = (dataTransfer: DataTransfer) => { setPendingDrop(dataTransfer); if (route !== "home") changeRoute("home"); };
-  const withGlobalDrop = (content: ReactNode) => <><GlobalDropUpload onDrop={handleGlobalDrop} />{content}</>;
+  const withGlobalDrop = (content: ReactNode) => route === "home" || route === "manage" ? <><GlobalDropUpload onDrop={handleGlobalDrop} />{content}</> : content;
 
   if (shareToken) return <PhotoWallSharePage token={shareToken} />;
   if (!session) return <AuthScreen t={t} onAuthenticated={(nextSession) => { saveSession(nextSession); setSession(nextSession); changeRoute("home"); }} />;

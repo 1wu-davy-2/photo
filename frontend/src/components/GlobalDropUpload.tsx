@@ -10,25 +10,28 @@ export function GlobalDropUpload({ onDrop }: GlobalDropUploadProps) {
   const dragDepth = useRef(0);
 
   useEffect(() => {
-    const hasFiles = (event: DragEvent) => Array.from(event.dataTransfer?.types ?? []).includes("Files");
+    const hasExternalFiles = (event: DragEvent) => {
+      const types = Array.from(event.dataTransfer?.types ?? []);
+      return types.includes("Files") && !types.some((type) => type === "application/x-wall-item" || type === "application/x-photo-id");
+    };
     const onDragEnter = (event: DragEvent) => {
-      if (!hasFiles(event)) return;
+      if (!hasExternalFiles(event)) return;
       event.preventDefault();
       dragDepth.current += 1;
       setIsDragging(true);
     };
     const onDragOver = (event: DragEvent) => {
-      if (!hasFiles(event)) return;
+      if (!hasExternalFiles(event)) return;
       event.preventDefault();
     };
     const onDragLeave = (event: DragEvent) => {
-      if (!hasFiles(event)) return;
+      if (!hasExternalFiles(event)) return;
       event.preventDefault();
       dragDepth.current = Math.max(0, dragDepth.current - 1);
       if (dragDepth.current === 0) setIsDragging(false);
     };
     const onDropEvent = (event: DragEvent) => {
-      if (!hasFiles(event) || !event.dataTransfer) return;
+      if (!hasExternalFiles(event) || !event.dataTransfer) return;
       event.preventDefault();
       dragDepth.current = 0;
       setIsDragging(false);
