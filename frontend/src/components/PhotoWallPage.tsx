@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import Moveable from "react-moveable";
 import type { OnDrag, OnResize, OnRotate } from "react-moveable";
-import { Check, Copy, Expand, ImagePlus, LayoutTemplate, LoaderCircle, Palette, Plus, Save, Share2, Trash2, X } from "lucide-react";
+import { ArrowLeft, Check, Copy, Expand, ImagePlus, LayoutTemplate, LoaderCircle, Palette, Plus, Save, Share2, Trash2, X } from "lucide-react";
 
 import { createPhotoWall, createPhotoWallShare, getPhotoWall, listPhotoWalls, listPhotos, savePhotoWallLayout, updatePhotoWall } from "../api/client";
 import type { Translator } from "../i18n";
@@ -11,6 +11,8 @@ import type { Photo, PhotoWall, PhotoWallItem } from "../types/photo";
 interface PhotoWallPageProps {
   t: Translator;
   accessToken: string;
+  wallId?: string | null;
+  onBack?: () => void;
 }
 
 type EditableItemField = "width" | "height" | "rotation";
@@ -162,7 +164,7 @@ function PhotoWallCanvas({
   </>;
 }
 
-export function PhotoWallPage({ t, accessToken }: PhotoWallPageProps) {
+export function PhotoWallPage({ t, accessToken, wallId, onBack }: PhotoWallPageProps) {
   const [walls, setWalls] = useState<PhotoWall[]>([]);
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [wall, setWall] = useState<PhotoWall | null>(null);
@@ -173,6 +175,14 @@ export function PhotoWallPage({ t, accessToken }: PhotoWallPageProps) {
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
   const [shareUrl, setShareUrl] = useState("");
+  const initializedKeyRef = useRef<string | null>(null);
+  const initializationPromiseRef = useRef<{ key: string; promise: Promise<void> } | null>(null);
+  const activeInitializationKeyRef = useRef<string | null>(null);
+  const translatorRef = useRef(t);
+
+  useEffect(() => {
+    translatorRef.current = t;
+  }, [t]);
 
   const loadWall = useCallback(async (wallId: string) => {
     const nextWall = await getPhotoWall(wallId, accessToken);
@@ -183,32 +193,53 @@ export function PhotoWallPage({ t, accessToken }: PhotoWallPageProps) {
   }, [accessToken]);
 
   useEffect(() => {
-    let active = true;
-    void Promise.all([listPhotoWalls(accessToken), listPhotos("", "newest", "owned", accessToken)]).then(async ([nextWalls, photoResponse]) => {
-      if (!active) return;
+    const initializationKey = `${accessToken}:${wallId ?? "new"}`;
+    activeInitializationKeyRef.current = initializationKey;
+    if (initializedKeyRef.current === initializationKey || initializationPromiseRef.current?.key === initializationKey) {
+      return () => {
+        if (activeInitializationKeyRef.current === initializationKey) activeInitializationKeyRef.current = null;
+      };
+    }
+
+    const initializationPromise = Promise.all([listPhotoWalls(accessToken), listPhotos("", "newest", "owned", accessToken)]).then(async ([nextWalls, photoResponse]) => {
+      if (activeInitializationKeyRef.current !== initializationKey) return;
       setPhotos(photoResponse.items);
-      if (nextWalls.length === 0) {
-        const firstWall = await createPhotoWall({ name: t("wall.defaultName"), background_color: "#F6FAFF" }, accessToken);
-        if (!active) return;
-        setWalls([firstWall]);
+      if (wallId === null || nextWalls.length === 0) {
+        const firstWall = await createPhotoWall({ name: translatorRef.current("wall.defaultName"), background_color: "#F6FAFF" }, accessToken);
+        if (activeInitializationKeyRef.current !== initializationKey) return;
+        setWalls([firstWall, ...nextWalls]);
         setWall(firstWall);
         setItems(normalizeItems(firstWall.items));
       } else {
         setWalls(nextWalls);
-        await loadWall(nextWalls[0].id);
+        await loadWall(wallId ?? nextWalls[0].id);
       }
-    }).catch((requestError) => { if (active) setError(requestError instanceof Error ? requestError.message : t("manage.error")); }).finally(() => { if (active) setIsLoading(false); });
-    return () => { active = false; };
-  }, [accessToken, loadWall, t]);
+      initializedKeyRef.current = initializationKey;
+    }).catch((requestError) => {
+      if (activeInitializationKeyRef.current === initializationKey) {
+        initializedKeyRef.current = null;
+        setError(requestError instanceof Error ? requestError.message : translatorRef.current("manage.error"));
+      }
+    }).finally(() => {
+      if (activeInitializationKeyRef.current === initializationKey) setIsLoading(false);
+      if (initializationPromiseRef.current?.promise === initializationPromise) initializationPromiseRef.current = null;
+    });
+
+    initializationPromiseRef.current = { key: initializationKey, promise: initializationPromise };
+    void initializationPromise;
+    return () => {
+      if (activeInitializationKeyRef.current === initializationKey) activeInitializationKeyRef.current = null;
+    };
+  }, [accessToken, loadWall, wallId]);
 
   const selectedItem = useMemo(() => items.find((item) => item.id === selectedId) ?? null, [items, selectedId]);
-  const availablePhotos = photos.filter((photo) => !items.some((item) => item.photo.id === photo.id));
+  const availablePhotos = photos;
 
   const addPhoto = (photoId: string, x?: number, y?: number) => {
     const photo = photos.find((candidate) => candidate.id === photoId);
-    if (!photo || items.some((item) => item.photo.id === photoId)) return;
+    if (!photo) return;
     const position = initialPosition(items.length);
-    const item: PhotoWallItem = { id: `draft-${photo.id}`, photo, x: x ?? position.x, y: y ?? position.y, width: position.width, height: position.height, rotation: position.rotation, z_index: position.z_index };
+    const item: PhotoWallItem = { id: `draft-${photo.id}-${Date.now()}-${items.length}`, photo, x: x ?? position.x, y: y ?? position.y, width: position.width, height: position.height, rotation: position.rotation, z_index: position.z_index };
     setItems((current) => [...current, item]);
     setSelectedId(item.id);
   };
@@ -244,8 +275,10 @@ export function PhotoWallPage({ t, accessToken }: PhotoWallPageProps) {
     if (!wall) return;
     setIsSaving(true); setError(""); setNotice("");
     try {
+      const selectedPhotoId = selectedItem?.photo.id;
       const saved = await savePhotoWallLayout(wall.id, { background_color: wall.background_color, items: items.map(({ photo, id, ...item }) => ({ ...item, photo_id: photo.id })) }, accessToken);
-      setWall(saved); setWalls((current) => current.map((candidate) => candidate.id === saved.id ? saved : candidate)); setItems(normalizeItems(saved.items)); setNotice(t("wall.saved"));
+      const nextItems = normalizeItems(saved.items);
+      setWall(saved); setWalls((current) => current.map((candidate) => candidate.id === saved.id ? saved : candidate)); setItems(nextItems); setSelectedId(selectedPhotoId ? nextItems.find((item) => item.photo.id === selectedPhotoId)?.id ?? null : null); setNotice(t("wall.saved"));
     } catch (requestError) { setError(requestError instanceof Error ? requestError.message : t("manage.error")); }
     finally { setIsSaving(false); }
   };
@@ -279,7 +312,7 @@ export function PhotoWallPage({ t, accessToken }: PhotoWallPageProps) {
 
   if (isLoading) return <section className="wall-loading"><LoaderCircle className="spin" size={24} /> {t("wall.loading")}</section>;
   return <section className="workspace-page photo-wall-page">
-    <div className="page-heading wall-heading"><div><span className="eyebrow"><span className="live-dot" /> {t("wall.eyebrow")}</span><h1>{t("wall.title")}</h1><p>{t("wall.description")}</p></div><div className="wall-toolbar"><button className="button button-ghost" type="button" onClick={() => void createWall()}><Plus size={16} /> {t("wall.newWall")}</button><button className="button button-ghost" type="button" onClick={() => void renameWall()} disabled={!wall}><LayoutTemplate size={16} /> {t("wall.rename")}</button><button className="button button-primary" type="button" onClick={() => void save()} disabled={!wall || isSaving}><Save size={16} /> {isSaving ? t("wall.saving") : t("wall.save")}</button><button className="button button-soft" type="button" onClick={() => void share()} disabled={!wall}><Share2 size={16} /> {t("wall.share")}</button></div></div>
+    <div className="page-heading wall-heading"><div><span className="eyebrow"><span className="live-dot" /> {t("wall.eyebrow")}</span><h1>{t("wall.title")}</h1><p>{t("wall.description")}</p></div><div className="wall-toolbar">{onBack && <button className="button button-ghost" type="button" onClick={onBack}><ArrowLeft size={16} /> {t("wall.back")}</button>}<button className="button button-ghost" type="button" onClick={() => void createWall()}><Plus size={16} /> {t("wall.newWall")}</button><button className="button button-ghost" type="button" onClick={() => void renameWall()} disabled={!wall}><LayoutTemplate size={16} /> {t("wall.rename")}</button><button className="button button-primary" type="button" onClick={() => void save()} disabled={!wall || isSaving}><Save size={16} /> {isSaving ? t("wall.saving") : t("wall.save")}</button><button className="button button-soft" type="button" onClick={() => void share()} disabled={!wall}><Share2 size={16} /> {t("wall.share")}</button></div></div>
     {(notice || error) && <div className={`status-banner ${error ? "status-error" : "status-success"}`} role="status"><span>{error || notice}</span>{shareUrl && <div className="share-link-row"><input className="share-link-input" aria-label={t("wall.shareLink")} readOnly value={shareUrl} onFocus={(event) => event.currentTarget.select()} /><button className="button button-ghost share-copy" type="button" onClick={() => void copyShareUrl(shareUrl)}><Copy size={14} /> {t("wall.copyLink")}</button></div>}</div>}
     <div className="wall-layout"><aside className="wall-sidebar"><div className="wall-panel-heading"><span>{t("wall.selectWall")}</span><span>{walls.length}</span></div><select className="wall-select" value={wall?.id ?? ""} onChange={(event) => void loadWall(event.target.value)}>{walls.map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.name}</option>)}</select>
       <div className="wall-background-panel"><div className="wall-panel-heading"><span><Palette size={14} /> {t("wall.background")}</span><span className="wall-color-sample" style={{ backgroundColor: wall?.background_color }} /></div><label className="wall-color-picker"><span>{t("wall.backgroundColor")}</span><input type="color" aria-label={t("wall.backgroundColor")} value={wall?.background_color ?? "#F6FAFF"} onChange={(event) => updateBackground(event.target.value)} /></label><small className="wall-color-hint">{t("wall.colorHint")}</small><div className="wall-color-presets">{BACKGROUND_PRESETS.map((color) => <button key={color} className={`wall-color-swatch ${wall?.background_color.toUpperCase() === color ? "is-active" : ""}`} type="button" title={color} aria-label={`${t("wall.backgroundColor")} ${color}`} style={{ backgroundColor: color }} onClick={() => updateBackground(color)}>{wall?.background_color.toUpperCase() === color && <Check size={12} />}</button>)}</div></div>

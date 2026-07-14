@@ -56,7 +56,7 @@ def test_photo_wall_rejects_invalid_background_color(test_app):
     assert response.status_code == 422
 
 
-def test_photo_wall_rejects_duplicate_photo_items(test_app, image_bytes):
+def test_photo_wall_allows_duplicate_photo_items(test_app, image_bytes):
     with TestClient(test_app) as client:
         headers = login(client)
         uploaded = client.post(
@@ -69,12 +69,13 @@ def test_photo_wall_rejects_duplicate_photo_items(test_app, image_bytes):
             f"/api/photo-walls/{wall.json()['id']}/layout",
             headers=headers,
             json={"items": [
-                {"photo_id": uploaded.json()["id"], "x": 10, "y": 10, "width": 20, "rotation": 0, "z_index": 1},
-                {"photo_id": uploaded.json()["id"], "x": 20, "y": 20, "width": 20, "rotation": 0, "z_index": 2},
+                {"photo_id": uploaded.json()["id"], "x": 10, "y": 10, "width": 20, "height": 18, "rotation": 0, "z_index": 1},
+                {"photo_id": uploaded.json()["id"], "x": 20, "y": 20, "width": 20, "height": 18, "rotation": 0, "z_index": 2},
             ]},
         )
 
-    assert response.status_code == 400
+    assert response.status_code == 200
+    assert len(response.json()["items"]) == 2
 
 
 def test_deleting_a_photo_cleans_up_wall_items(test_app, image_bytes):

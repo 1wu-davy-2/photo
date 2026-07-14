@@ -25,7 +25,6 @@ CREATE TABLE IF NOT EXISTS `photo_wall_items` (
     `rotation` double NOT NULL DEFAULT 0,
     `z_index` int NOT NULL DEFAULT 1,
     PRIMARY KEY (`id`),
-    UNIQUE KEY `uq_photo_wall_items_wall_photo` (`wall_id`, `photo_id`),
     KEY `ix_photo_wall_items_wall_id` (`wall_id`),
     KEY `ix_photo_wall_items_photo_id` (`photo_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

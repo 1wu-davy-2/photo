@@ -11,12 +11,13 @@ import { ManagementPage } from "./components/ManagementPage";
 import { PhotoGrid } from "./components/PhotoGrid";
 import { PhotoLightbox } from "./components/PhotoLightbox";
 import { PhotoWallPage } from "./components/PhotoWallPage";
+import { PhotoWallLibraryPage } from "./components/PhotoWallLibraryPage";
 import { PhotoWallSharePage } from "./components/PhotoWallSharePage";
 import { UploadDropzone } from "./components/UploadDropzone";
 import { UploadFolderDialog } from "./components/UploadFolderDialog";
 import { UserManagementPage } from "./components/UserManagementPage";
 import { loadLocale, saveLocale, translate, type Locale, type Translator } from "./i18n";
-import { navigate, readRoute, readShareToken, type AppRoute } from "./routing";
+import { navigate, navigateToWallEditor, readRoute, readShareToken, readWallId, type AppRoute } from "./routing";
 import { loadTheme, saveTheme, type ColorTheme } from "./theme";
 import type { Folder, Photo, SortOrder, UploadState } from "./types/photo";
 import { collectDroppedUpload } from "./upload";
@@ -126,6 +127,7 @@ function App() {
   const [pendingDrop, setPendingDrop] = useState<DataTransfer | null>(null);
   const t = translate(locale);
   const shareToken = readShareToken();
+  const wallId = readWallId();
 
   useEffect(() => { const onHashChange = () => setRoute(readRoute()); window.addEventListener("hashchange", onHashChange); return () => window.removeEventListener("hashchange", onHashChange); }, []);
   useEffect(() => { const handleExpired = () => setSession(null); window.addEventListener("auth-expired", handleExpired); return () => window.removeEventListener("auth-expired", handleExpired); }, []);
@@ -142,7 +144,8 @@ function App() {
   if (shareToken) return <PhotoWallSharePage token={shareToken} />;
   if (!session) return <AuthScreen t={t} onAuthenticated={(nextSession) => { saveSession(nextSession); setSession(nextSession); changeRoute("home"); }} />;
   const isAdmin = session.user.role === "admin";
-  if (route === "walls") return withGlobalDrop(<ManagementShell session={session} locale={locale} route={route} t={t} onLocaleChange={changeLocale} onNavigate={changeRoute} onLogout={logout} theme={theme} onThemeChange={changeTheme}><PhotoWallPage t={t} accessToken={session.accessToken} /></ManagementShell>);
+  if (route === "walls") return withGlobalDrop(<ManagementShell session={session} locale={locale} route={route} t={t} onLocaleChange={changeLocale} onNavigate={changeRoute} onLogout={logout} theme={theme} onThemeChange={changeTheme}><PhotoWallLibraryPage t={t} accessToken={session.accessToken} onCreate={() => navigateToWallEditor(null)} onOpen={(id) => navigateToWallEditor(id)} /></ManagementShell>);
+  if (route === "walls-editor") return withGlobalDrop(<ManagementShell session={session} locale={locale} route={route} t={t} onLocaleChange={changeLocale} onNavigate={changeRoute} onLogout={logout} theme={theme} onThemeChange={changeTheme}><PhotoWallPage t={t} accessToken={session.accessToken} wallId={wallId} onBack={() => changeRoute("walls")} /></ManagementShell>);
   if (route === "users" && isAdmin) return withGlobalDrop(<ManagementShell session={session} locale={locale} route={route} t={t} onLocaleChange={changeLocale} onNavigate={changeRoute} onLogout={logout} theme={theme} onThemeChange={changeTheme}><UserManagementPage t={t} accessToken={session.accessToken} /></ManagementShell>);
   if (route === "manage") return withGlobalDrop(<ManagementShell session={session} locale={locale} route={route} t={t} onLocaleChange={changeLocale} onNavigate={changeRoute} onLogout={logout} theme={theme} onThemeChange={changeTheme}><ManagementPage t={t} isAdmin={isAdmin} accessToken={session.accessToken} /></ManagementShell>);
   return withGlobalDrop(<GalleryApp session={session} locale={locale} t={t} route="home" onLocaleChange={changeLocale} onNavigate={changeRoute} onLogout={logout} theme={theme} onThemeChange={changeTheme} pendingDrop={pendingDrop} onPendingDropHandled={() => setPendingDrop(null)} />);

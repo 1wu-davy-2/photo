@@ -1,4 +1,5 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { StrictMode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { savePhotoWallLayout } from "../api/client";
@@ -28,6 +29,11 @@ const wall = {
   items: [{ id: "item-1", photo, x: 10, y: 15, width: 28, height: 32, rotation: -4, z_index: 2 }],
 };
 
+const savedWall = {
+  ...wall,
+  items: [{ ...wall.items[0], id: "saved-item-1" }],
+};
+
 vi.mock("../api/client", () => ({
   listPhotoWalls: vi.fn(async () => [wall]),
   getPhotoWall: vi.fn(async () => wall),
@@ -35,7 +41,7 @@ vi.mock("../api/client", () => ({
   fetchPhotoBlobUrl: vi.fn(async () => "blob:photo"),
   createPhotoWallShare: vi.fn(async () => ({ token: "share-token", path: "/#/share/walls/share-token", is_active: true })),
   createPhotoWall: vi.fn(),
-  savePhotoWallLayout: vi.fn(async () => wall),
+  savePhotoWallLayout: vi.fn(async () => savedWall),
   updatePhotoWall: vi.fn(),
 }));
 
@@ -82,5 +88,61 @@ describe("PhotoWallPage sharing", () => {
       }),
       "token",
     ));
+  });
+
+  it("keeps the selected photo inspector connected after saving draft items", async () => {
+    render(<PhotoWallPage t={translate("en-US")} accessToken="token" />);
+
+    await screen.findByLabelText("Background color");
+    fireEvent.click(document.querySelector('[data-wall-item-id="item-1"]') as HTMLElement);
+    fireEvent.click(screen.getByRole("button", { name: "Save layout" }));
+
+    expect(await screen.findByRole("spinbutton", { name: "Width" })).toHaveValue(28);
+  });
+
+  it("allows the same photo to be added more than once", async () => {
+    const emptyWall = { ...wall, items: [] };
+    const { unmount } = render(<PhotoWallPage t={translate("en-US")} accessToken="token" />);
+    unmount();
+
+    const client = await import("../api/client");
+    vi.mocked(client.getPhotoWall).mockResolvedValueOnce(emptyWall);
+    vi.mocked(client.listPhotoWalls).mockResolvedValueOnce([emptyWall]);
+    render(<PhotoWallPage t={translate("en-US")} accessToken="token" />);
+
+    await screen.findByRole("button", { name: /summer\.png/ });
+    fireEvent.click(document.querySelector(".wall-asset") as HTMLElement);
+    fireEvent.click(document.querySelector(".wall-asset") as HTMLElement);
+
+    expect(document.querySelectorAll(".wall-item")).toHaveLength(2);
+  });
+
+  it("creates only one wall when the new-wall editor rerenders", async () => {
+    const client = await import("../api/client");
+    vi.mocked(client.createPhotoWall).mockResolvedValue(wall);
+    vi.mocked(client.listPhotoWalls).mockResolvedValue([]);
+
+    const { rerender } = render(<StrictMode><PhotoWallPage t={translate("en-US")} accessToken="token" wallId={null} /></StrictMode>);
+    await screen.findByLabelText("Background color");
+    rerender(<StrictMode><PhotoWallPage t={translate("en-US")} accessToken="token" wallId={null} /></StrictMode>);
+
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    expect(client.createPhotoWall).toHaveBeenCalledTimes(1);
+  });
+
+  it("finishes initialization when the translator changes during loading", async () => {
+    const client = await import("../api/client");
+    let resolveWalls!: (value: typeof wall[]) => void;
+    const wallsPromise = new Promise<typeof wall[]>((resolve) => { resolveWalls = resolve; });
+    vi.mocked(client.listPhotoWalls).mockReturnValueOnce(wallsPromise);
+    vi.mocked(client.listPhotos).mockResolvedValueOnce({ items: [photo], total: 1, page: 1, page_size: 24 });
+    vi.mocked(client.createPhotoWall).mockResolvedValue(wall);
+
+    const { rerender } = render(<PhotoWallPage t={translate("en-US")} accessToken="token" wallId={null} />);
+    rerender(<PhotoWallPage t={translate("zh-CN")} accessToken="token" wallId={null} />);
+    resolveWalls([]);
+
+    expect(await screen.findByRole("combobox")).toHaveValue("wall-1");
+    expect(client.createPhotoWall).toHaveBeenCalledTimes(1);
   });
 });

@@ -29,7 +29,7 @@ export function AppShell({ total, username, role, locale, route, t, onLocaleChan
     { route: "walls", label: t("nav.walls"), icon: LayoutTemplate },
     { route: "users", label: t("nav.users"), icon: Users, adminOnly: true },
   ];
-  const currentLabel = links.find((link) => link.route === route)?.label ?? t("nav.home");
+  const currentLabel = links.find((link) => link.route === route)?.label ?? (route === "walls-editor" ? t("nav.walls") : t("nav.home"));
 
   return (
     <div className="app-shell">
@@ -42,7 +42,7 @@ export function AppShell({ total, username, role, locale, route, t, onLocaleChan
           <span className="sidebar-kicker">PHOTO WORKSPACE</span>
           <nav className="route-nav" aria-label="Primary navigation">
             {links.filter((link) => !link.adminOnly || role === "admin").map(({ route: target, label, icon: Icon }) => (
-              <a key={target} className={`route-link ${route === target ? "is-active" : ""}`} href={routeHref(target)} onClick={() => onNavigate(target)} aria-current={route === target ? "page" : undefined}>
+              <a key={target} className={`route-link ${route === target || target === "walls" && route === "walls-editor" ? "is-active" : ""}`} href={routeHref(target)} onClick={() => onNavigate(target)} aria-current={route === target || target === "walls" && route === "walls-editor" ? "page" : undefined}>
                 <Icon size={17} /> <span>{label}</span>
               </a>
             ))}

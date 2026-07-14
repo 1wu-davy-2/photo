@@ -85,7 +85,6 @@ class PhotoWall(Base):
 class PhotoWallItem(Base):
     __tablename__ = "photo_wall_items"
     __table_args__ = (
-        UniqueConstraint("wall_id", "photo_id", name="uq_photo_wall_items_wall_photo"),
         Index("ix_photo_wall_items_wall_id", "wall_id"),
         Index("ix_photo_wall_items_photo_id", "photo_id"),
     )

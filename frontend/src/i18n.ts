@@ -41,6 +41,18 @@ export function translate(locale: Locale): Translator {
     if (key === "wall.height") return locale === "zh-CN" ? "\u9ad8\u5ea6" : "Height";
     if (key === "wall.defaultName") return locale === "zh-CN" ? "\u6211\u7684\u7167\u7247\u5899" : "My photo wall";
     if (key === "wall.colorHint") return locale === "zh-CN" ? "\u9009\u62e9\u753b\u5e03\u5e95\u8272" : "Choose a canvas color";
+    if (key === "wall.libraryEyebrow") return locale === "zh-CN" ? "\u56fe\u7247\u96c6\u5408" : "Your collection";
+    if (key === "wall.libraryTitle") return locale === "zh-CN" ? "\u7167\u7247\u5899" : "Photo walls";
+    if (key === "wall.libraryDescription") return locale === "zh-CN" ? "\u9009\u62e9\u4e00\u9762\u7167\u7247\u5899\uff0c\u7ee7\u7eed\u7f16\u6392\u4f60\u7684\u6545\u4e8b\u3002" : "Choose a wall, or start a new visual story.";
+    if (key === "wall.emptyTitle") return locale === "zh-CN" ? "\u8fd8\u6ca1\u6709\u7167\u7247\u5899" : "No photo walls yet";
+    if (key === "wall.emptyDescription") return locale === "zh-CN" ? "\u521b\u5efa\u4e00\u9762\u7167\u7247\u5899\uff0c\u5f00\u59cb\u5b89\u6392\u4f60\u7684\u7167\u7247\u3002" : "Create a wall and start arranging your photos.";
+    if (key === "wall.open") return locale === "zh-CN" ? "\u6253\u5f00\u7167\u7247\u5899" : "Open photo wall";
+    if (key === "wall.photos") return locale === "zh-CN" ? "\u5f20\u7167\u7247" : "photos";
+    if (key === "wall.updated") return locale === "zh-CN" ? "\u6700\u540e\u66f4\u65b0" : "Updated";
+    if (key === "wall.page") return locale === "zh-CN" ? "\u7b2c" : "Page";
+    if (key === "wall.previousPage") return locale === "zh-CN" ? "\u4e0a\u4e00\u9875" : "Previous page";
+    if (key === "wall.nextPage") return locale === "zh-CN" ? "\u4e0b\u4e00\u9875" : "Next page";
+    if (key === "wall.back") return locale === "zh-CN" ? "\u8fd4\u56de\u7167\u7247\u5899" : "Back to photo walls";
     const wallLabels: Record<Locale, Record<string, string>> = {
       "zh-CN": { "nav.walls": "照片墙", "wall.eyebrow": "画布工作台", "wall.title": "照片墙", "wall.description": "把照片放进一面自由画布，保存你的故事并分享给别人。", "wall.newWall": "新建照片墙", "wall.rename": "重命名", "wall.save": "保存布局", "wall.saving": "保存中", "wall.saved": "照片墙布局已保存", "wall.share": "分享", "wall.shareCopied": "分享链接已复制", "wall.copyLink": "复制链接", "wall.selectWall": "我的照片墙", "wall.assets": "素材库", "wall.add": "点击或拖入画布", "wall.emptyAssets": "没有可添加的照片", "wall.selected": "当前照片", "wall.size": "尺寸", "wall.rotation": "旋转", "wall.remove": "移出照片墙", "wall.selectHint": "选择一张照片", "wall.selectHintDescription": "从左侧素材库拖入照片，或点击照片添加到画布。", "wall.loading": "正在打开照片墙", "wall.wallName": "照片墙名称" },
       "en-US": { "nav.walls": "Photo walls", "wall.eyebrow": "Canvas workspace", "wall.title": "Photo walls", "wall.description": "Arrange photos on a freeform canvas, save the story, and share it with others.", "wall.newWall": "New wall", "wall.rename": "Rename", "wall.save": "Save layout", "wall.saving": "Saving", "wall.saved": "Photo wall layout saved", "wall.share": "Share", "wall.shareCopied": "Share link copied", "wall.copyLink": "Copy link", "wall.selectWall": "My photo walls", "wall.assets": "Photo assets", "wall.add": "Click or drag to canvas", "wall.emptyAssets": "No photos available", "wall.selected": "Selected photo", "wall.size": "Size", "wall.rotation": "Rotation", "wall.remove": "Remove from wall", "wall.selectHint": "Select a photo", "wall.selectHintDescription": "Drag a photo from the asset shelf or click one to add it.", "wall.loading": "Opening photo wall", "wall.wallName": "Photo wall name" },

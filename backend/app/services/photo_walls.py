@@ -56,10 +56,8 @@ class PhotoWallService:
         if background_color is not None:
             wall.background_color = background_color.strip()
         photo_ids = [item["photo_id"] for item in items]
-        if len(photo_ids) != len(set(photo_ids)):
-            raise PhotoWallValidationError("A photo can only appear once on a wall")
         photos = {photo.id: photo for photo in self.session.scalars(select(Photo).where(Photo.id.in_(photo_ids), Photo.owner_id == owner_id))}
-        if len(photos) != len(photo_ids):
+        if set(photos) != set(photo_ids):
             raise PhotoNotFoundError("A wall item photo was not found")
         self.session.execute(delete(PhotoWallItem).where(PhotoWallItem.wall_id == wall.id))
         for item in items:
