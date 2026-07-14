@@ -48,6 +48,7 @@ export interface PhotoWallItem {
   x: number;
   y: number;
   width: number;
+  height: number;
   rotation: number;
   z_index: number;
 }

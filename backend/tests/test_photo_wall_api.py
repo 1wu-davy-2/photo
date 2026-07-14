@@ -21,12 +21,12 @@ def test_photo_wall_layout_and_public_share(test_app, image_bytes):
             files={"file": ("wall.png", image_bytes, "image/png")},
         )
         photo_id = uploaded.json()["id"]
-        created = client.post("/api/photo-walls", headers=headers, json={"name": "Summer wall"})
+        created = client.post("/api/photo-walls", headers=headers, json={"name": "Summer wall", "background_color": "#FFFFFF"})
         wall_id = created.json()["id"]
         layout = client.put(
             f"/api/photo-walls/{wall_id}/layout",
             headers=headers,
-            json={"items": [{"photo_id": photo_id, "x": 18, "y": 24, "width": 28, "rotation": -4, "z_index": 2}]},
+            json={"items": [{"photo_id": photo_id, "x": 18, "y": 24, "width": 28, "height": 36, "rotation": -4, "z_index": 2}], "background_color": "#FFD6E7"},
         )
         loaded = client.get(f"/api/photo-walls/{wall_id}", headers=headers)
         share = client.post(f"/api/photo-walls/{wall_id}/share", headers=headers)
@@ -36,13 +36,24 @@ def test_photo_wall_layout_and_public_share(test_app, image_bytes):
     assert uploaded.status_code == 201
     assert created.status_code == 201
     assert layout.status_code == 200
+    assert loaded.json()["background_color"] == "#FFD6E7"
     assert loaded.json()["items"][0]["x"] == 18
+    assert loaded.json()["items"][0]["height"] == 36
     assert share.status_code == 201
     assert public.status_code == 200
     assert public.json()["name"] == "Summer wall"
     assert public.json()["items"][0]["photo"]["id"] == photo_id
+    assert public.json()["items"][0]["height"] == 36
     assert content.status_code == 200
     assert content.content == image_bytes
+
+
+def test_photo_wall_rejects_invalid_background_color(test_app):
+    with TestClient(test_app) as client:
+        headers = login(client)
+        response = client.post("/api/photo-walls", headers=headers, json={"name": "Invalid color", "background_color": "url(javascript:alert(1))"})
+
+    assert response.status_code == 422
 
 
 def test_photo_wall_rejects_duplicate_photo_items(test_app, image_bytes):

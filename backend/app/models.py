@@ -96,6 +96,7 @@ class PhotoWallItem(Base):
     x: Mapped[float] = mapped_column(Float, nullable=False, default=10)
     y: Mapped[float] = mapped_column(Float, nullable=False, default=10)
     width: Mapped[float] = mapped_column(Float, nullable=False, default=24)
+    height: Mapped[float] = mapped_column(Float, nullable=False, default=18)
     rotation: Mapped[float] = mapped_column(Float, nullable=False, default=0)
     z_index: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
 

@@ -30,7 +30,7 @@ def wall_read(wall: PhotoWall, service: PhotoWallService) -> PhotoWallRead:
     for item in service.items(wall.id):
         photo = service.session.get(Photo, item.photo_id)
         if photo is not None:
-            items.append(PhotoWallItemRead(id=item.id, photo=PhotoRead.model_validate(photo), x=item.x, y=item.y, width=item.width, rotation=item.rotation, z_index=item.z_index))
+            items.append(PhotoWallItemRead(id=item.id, photo=PhotoRead.model_validate(photo), x=item.x, y=item.y, width=item.width, height=item.height, rotation=item.rotation, z_index=item.z_index))
     return PhotoWallRead(id=wall.id, owner_id=wall.owner_id, name=wall.name, background_color=wall.background_color, created_at=wall.created_at, updated_at=wall.updated_at, items=items)
 
 
@@ -69,7 +69,7 @@ def update_wall(wall_id: str, payload: PhotoWallUpdate, current_user: Authentica
 def update_layout(wall_id: str, payload: PhotoWallLayoutUpdate, current_user: AuthenticatedUser = Depends(require_current_user), session: Session = Depends(get_session)):
     service = PhotoWallService(session)
     try:
-        wall = service.save_layout(wall_id, owner_id=current_user.id, items=[item.model_dump() for item in payload.items])
+        wall = service.save_layout(wall_id, owner_id=current_user.id, items=[item.model_dump() for item in payload.items], background_color=payload.background_color)
         return wall_read(wall, service)
     except PhotoWallValidationError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error

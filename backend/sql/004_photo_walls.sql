@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS `photo_wall_items` (
     `x` double NOT NULL DEFAULT 10,
     `y` double NOT NULL DEFAULT 10,
     `width` double NOT NULL DEFAULT 24,
+    `height` double NOT NULL DEFAULT 18,
     `rotation` double NOT NULL DEFAULT 0,
     `z_index` int NOT NULL DEFAULT 1,
     PRIMARY KEY (`id`),

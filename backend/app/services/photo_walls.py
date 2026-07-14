@@ -51,8 +51,10 @@ class PhotoWallService:
         self.session.refresh(wall)
         return wall
 
-    def save_layout(self, wall_id: str, *, owner_id: str, items: list[dict]) -> PhotoWall:
+    def save_layout(self, wall_id: str, *, owner_id: str, items: list[dict], background_color: str | None = None) -> PhotoWall:
         wall = self.get(wall_id, owner_id=owner_id)
+        if background_color is not None:
+            wall.background_color = background_color.strip()
         photo_ids = [item["photo_id"] for item in items]
         if len(photo_ids) != len(set(photo_ids)):
             raise PhotoWallValidationError("A photo can only appear once on a wall")

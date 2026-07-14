@@ -171,8 +171,8 @@ export function updatePhotoWall(id: string, payload: { name?: string; background
   return request<PhotoWall>(`/api/photo-walls/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) }, accessToken);
 }
 
-export function savePhotoWallLayout(id: string, items: Array<{ photo_id: string; x: number; y: number; width: number; rotation: number; z_index: number }>, accessToken?: string): Promise<PhotoWall> {
-  return request<PhotoWall>(`/api/photo-walls/${id}/layout`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ items }) }, accessToken);
+export function savePhotoWallLayout(id: string, payload: { items: Array<{ photo_id: string; x: number; y: number; width: number; height: number; rotation: number; z_index: number }>; background_color?: string }, accessToken?: string): Promise<PhotoWall> {
+  return request<PhotoWall>(`/api/photo-walls/${id}/layout`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) }, accessToken);
 }
 
 export function createPhotoWallShare(id: string, accessToken?: string): Promise<PhotoWallShare> {

@@ -304,8 +304,19 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .wall-sidebar, .wall-inspector { min-width: 0; padding: 15px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow-soft); }
 .wall-sidebar { display: grid; align-content: start; gap: 11px; }
 .wall-panel-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--ink); font-size: 11px; font-weight: 700; }
+.wall-panel-heading > span:first-child { display: inline-flex; align-items: center; gap: 6px; }
 .wall-panel-heading > span:last-child { display: grid; place-items: center; min-width: 22px; height: 22px; color: var(--accent); background: var(--accent-soft); border-radius: 6px; font-size: 10px; }
 .wall-select { width: 100%; min-height: 39px; padding: 0 9px; color: var(--ink); background: var(--surface); border: 1px solid var(--line-strong); border-radius: 7px; outline: 0; font-size: 11px; }
+.wall-background-panel { display: grid; gap: 10px; padding: 11px; background: var(--surface-soft); border: 1px solid var(--line); border-radius: 8px; }
+.wall-background-panel .wall-panel-heading { margin: -2px 0 0; }
+.wall-color-sample { width: 22px; min-width: 22px !important; height: 22px; border: 1px solid var(--line-strong); border-radius: 6px; }
+.wall-color-picker { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--muted); font-size: 10px; }
+.wall-color-picker input { width: 40px; height: 28px; padding: 3px; background: var(--surface); border: 1px solid var(--line-strong); border-radius: 6px; cursor: pointer; }
+.wall-color-hint { color: var(--muted); font-size: 9px; }
+.wall-color-presets { display: flex; flex-wrap: wrap; gap: 7px; }
+.wall-color-swatch { display: grid; place-items: center; width: 23px; height: 23px; padding: 0; color: var(--ink); border: 2px solid var(--surface); border-radius: 50%; box-shadow: 0 0 0 1px var(--line-strong); }
+.wall-color-swatch:hover, .wall-color-swatch.is-active { box-shadow: 0 0 0 2px var(--accent); }
+.wall-color-swatch.is-active { color: var(--accent-strong); }
 .wall-assets { display: grid; gap: 6px; max-height: 515px; overflow-y: auto; }
 .wall-asset { display: grid; grid-template-columns: 39px minmax(0, 1fr) auto; align-items: center; gap: 7px; min-width: 0; padding: 5px; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 7px; text-align: left; transition: border-color 160ms ease, background 160ms ease; }
 .wall-asset:hover { background: var(--surface-soft); border-color: var(--accent); }
@@ -315,11 +326,11 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .wall-asset small { overflow: hidden; color: var(--muted); text-overflow: ellipsis; white-space: nowrap; font-size: 9px; }
 .wall-asset > svg { color: var(--accent); }
 .wall-empty { padding: 18px 6px; color: var(--muted); font-size: 11px; line-height: 1.5; text-align: center; }
-.wall-workspace { min-width: 0; }
+.wall-workspace { position: relative; min-width: 0; }
 .wall-canvas, .shared-wall-canvas { position: relative; min-height: 620px; overflow: hidden; border: 1px solid var(--line-strong); border-radius: var(--radius); box-shadow: var(--shadow-soft); }
 .wall-canvas::after, .shared-wall-canvas::after { position: absolute; inset: 0; pointer-events: none; border: 12px solid rgba(255, 255, 255, 0.22); content: ""; }
 .wall-canvas-label { position: absolute; top: 15px; left: 17px; z-index: 1; padding: 5px 8px; color: var(--muted); background: color-mix(in srgb, var(--surface) 86%, transparent); border: 1px solid var(--line); border-radius: 5px; font-size: 10px; }
-.wall-item { position: absolute; min-width: 88px; aspect-ratio: 4 / 3; padding: 7px; overflow: visible; background: var(--surface); border: 1px solid var(--line-strong); border-radius: 6px; box-shadow: 0 12px 24px rgba(30, 70, 105, 0.16); cursor: grab; transition: box-shadow 160ms ease, border-color 160ms ease; }
+.wall-item { position: absolute; min-width: 88px; min-height: 54px; padding: 7px; overflow: visible; background: var(--surface); border: 1px solid var(--line-strong); border-radius: 6px; box-shadow: 0 12px 24px rgba(30, 70, 105, 0.16); cursor: grab; touch-action: none; will-change: left, top, width, height, transform; transition: box-shadow 160ms ease, border-color 160ms ease; }
 .wall-item:active { cursor: grabbing; }
 .wall-item:hover, .wall-item.is-selected { border-color: var(--accent); box-shadow: 0 15px 31px color-mix(in srgb, var(--accent) 22%, transparent); }
 .wall-item img, .wall-item .authenticated-image-loading { display: block; width: 100%; height: 100%; min-height: 0; object-fit: cover; border-radius: 3px; }
@@ -330,6 +341,11 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .inspector-preview { aspect-ratio: 4 / 3; overflow: hidden; background: var(--surface-soft); border-radius: 7px; }
 .inspector-preview img, .inspector-preview .authenticated-image-loading { display: block; width: 100%; height: 100%; min-height: 0; object-fit: cover; }
 .inspector-name { overflow: hidden; color: var(--ink); text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
+.inspector-dimensions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.number-field { display: grid; gap: 6px; color: var(--muted); font-size: 10px; }
+.number-field > div { display: flex; align-items: center; gap: 5px; min-height: 34px; padding: 0 8px; background: var(--surface-soft); border: 1px solid var(--line); border-radius: 6px; }
+.number-field input { width: 100%; min-width: 0; color: var(--ink); background: transparent; border: 0; outline: 0; font-size: 12px; font-weight: 700; }
+.number-field em { color: var(--muted); font-size: 10px; font-style: normal; }
 .range-field { display: grid; gap: 7px; color: var(--muted); font-size: 10px; }
 .range-field span { display: flex; justify-content: space-between; }
 .range-field b { color: var(--accent); font-weight: 700; }
@@ -340,6 +356,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .inspector-empty strong { color: var(--ink); font-size: 12px; }
 .inspector-empty span { font-size: 10px; line-height: 1.55; }
 .wall-loading { display: grid; place-items: center; gap: 10px; min-height: 60vh; color: var(--muted); font-size: 12px; }
+.moveable-control-box { z-index: 40 !important; }
 .share-copy { min-height: 30px; margin-left: auto; padding: 0 10px; font-size: 10px; }
 .shared-wall-page { min-height: 100vh; padding: 0 5vw 50px; color: var(--ink); background: var(--canvas); }
 .shared-wall-header { display: flex; align-items: center; justify-content: space-between; min-height: 76px; border-bottom: 1px solid var(--line); }

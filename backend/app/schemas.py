@@ -90,12 +90,12 @@ class PhotoRenameRequest(BaseModel):
 
 class PhotoWallCreate(BaseModel):
     name: str = Field(default="Untitled wall", min_length=1, max_length=120)
-    background_color: str = Field(default="#F6FAFF", min_length=4, max_length=32)
+    background_color: str = Field(default="#F6FAFF", pattern=r"^#[0-9A-Fa-f]{6}$")
 
 
 class PhotoWallUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=120)
-    background_color: str | None = Field(default=None, min_length=4, max_length=32)
+    background_color: str | None = Field(default=None, pattern=r"^#[0-9A-Fa-f]{6}$")
 
 
 class PhotoWallItemInput(BaseModel):
@@ -103,12 +103,14 @@ class PhotoWallItemInput(BaseModel):
     x: float = Field(ge=0, le=100)
     y: float = Field(ge=0, le=100)
     width: float = Field(gt=5, le=100)
+    height: float = Field(default=18, gt=5, le=100)
     rotation: float = Field(ge=-180, le=180)
     z_index: int = Field(ge=0, le=10000)
 
 
 class PhotoWallLayoutUpdate(BaseModel):
     items: list[PhotoWallItemInput] = Field(default_factory=list, max_length=200)
+    background_color: str | None = Field(default=None, pattern=r"^#[0-9A-Fa-f]{6}$")
 
 
 class PhotoWallItemRead(BaseModel):
@@ -117,6 +119,7 @@ class PhotoWallItemRead(BaseModel):
     x: float
     y: float
     width: float
+    height: float
     rotation: float
     z_index: int
 
