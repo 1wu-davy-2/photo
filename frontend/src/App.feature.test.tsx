@@ -100,4 +100,49 @@ describe("localized protected navigation", () => {
 
     expect(await screen.findByRole("status")).toBeInTheDocument();
   });
+
+  it("requires confirmation before starting a selected photo upload", async () => {
+    const send = vi.fn();
+    class FakeXMLHttpRequest {
+      upload = { addEventListener: vi.fn() };
+      responseType = "";
+      response: unknown = null;
+      status = 0;
+      open = vi.fn();
+      setRequestHeader = vi.fn();
+      addEventListener = vi.fn();
+      send = send;
+    }
+
+    vi.stubGlobal("XMLHttpRequest", FakeXMLHttpRequest);
+    vi.stubGlobal("fetch", vi.fn().mockImplementation((input) => {
+      if (String(input).includes("/api/auth/login")) {
+        return Promise.resolve(jsonResponse({
+          access_token: "token",
+          token_type: "bearer",
+          expires_in: 3600,
+          expires_at: Math.floor(Date.now() / 1000) + 3600,
+          user: { username: "admin", role: "admin" },
+        }));
+      }
+      if (String(input).includes("/api/folders")) return Promise.resolve(jsonResponse([]));
+      return Promise.resolve(jsonResponse({ items: [], total: 0, page: 1, page_size: 24 }));
+    }));
+
+    render(<App />);
+    fireEvent.change(screen.getByLabelText(/username/i), { target: { value: "admin" } });
+    fireEvent.change(screen.getByLabelText(/password/i), { target: { value: "admin@123" } });
+    fireEvent.click(screen.getByRole("button", { name: /进入图库|enter archive/i }));
+    await screen.findByRole("navigation");
+    fireEvent.click(screen.getByRole("button", { name: "English" }));
+
+    const file = new File(["image"], "memory.png", { type: "image/png" });
+    fireEvent.change(document.querySelector('input[type="file"]')!, { target: { files: [file] } });
+
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    expect(send).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Start upload" }));
+
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1));
+  });
 });

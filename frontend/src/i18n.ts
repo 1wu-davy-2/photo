@@ -32,6 +32,27 @@ export function saveLocale(locale: Locale): void {
 
 export function translate(locale: Locale): Translator {
   return (key: string) => {
+    if (key === "upload.confirmEyebrow") return locale === "zh-CN" ? "\u4e0a\u4f20\u786e\u8ba4" : "Upload confirmation";
+    if (key === "upload.confirmTitle") return locale === "zh-CN" ? "\u786e\u8ba4\u4e0a\u4f20\u7167\u7247" : "Confirm photo upload";
+    if (key === "upload.confirmDescription") return locale === "zh-CN" ? "\u68c0\u6d4b\u5230\u4ee5\u4e0b\u7167\u7247\uff0c\u786e\u8ba4\u540e\u5f00\u59cb\u4e0a\u4f20\u3002" : "These photos are ready to upload. Start when you are ready.";
+    if (key === "upload.photosDetected") return locale === "zh-CN" ? "\u5f20\u7167\u7247\u5f85\u4e0a\u4f20" : "photos detected";
+    if (key === "upload.folderSource") return locale === "zh-CN" ? "\u6765\u6e90\u6587\u4ef6\u5939\uff1a" : "Folder source:";
+    if (key === "upload.start") return locale === "zh-CN" ? "\u5f00\u59cb\u4e0a\u4f20" : "Start upload";
+    if (key === "upload.cancel") return locale === "zh-CN" ? "\u53d6\u6d88" : "Cancel";
+    if (key === "upload.preparing") return locale === "zh-CN" ? "\u51c6\u5907\u4e2d" : "Preparing";
+    if (key === "upload.uploading") return locale === "zh-CN" ? "\u6b63\u5728\u4e0a\u4f20" : "Uploading";
+    if (key === "upload.paused") return locale === "zh-CN" ? "\u4e0a\u4f20\u5df2\u6682\u505c" : "Uploads paused";
+    if (key === "upload.complete") return locale === "zh-CN" ? "\u4e0a\u4f20\u5b8c\u6210" : "Upload complete";
+    if (key === "upload.completeDescription") return locale === "zh-CN" ? "\u6240\u6709\u7167\u7247\u5df2\u5904\u7406" : "All photos processed";
+    if (key === "upload.files") return locale === "zh-CN" ? "\u4e2a\u6587\u4ef6" : "files";
+    if (key === "upload.waiting") return locale === "zh-CN" ? "\u7b49\u5f85\u4e0a\u4f20" : "Waiting to upload";
+    if (key === "upload.failed") return locale === "zh-CN" ? "\u4e0a\u4f20\u5931\u8d25" : "failed";
+    if (key === "upload.pause") return locale === "zh-CN" ? "\u6682\u505c" : "Pause";
+    if (key === "upload.resume") return locale === "zh-CN" ? "\u7ee7\u7eed" : "Resume";
+    if (key === "upload.pauseAction") return locale === "zh-CN" ? "\u6682\u505c\u4e0a\u4f20" : "Pause uploads";
+    if (key === "upload.resumeAction") return locale === "zh-CN" ? "\u7ee7\u7eed\u4e0a\u4f20" : "Resume uploads";
+    if (key === "upload.dismiss") return locale === "zh-CN" ? "\u5173\u95ed\u4e0a\u4f20\u8fdb\u5ea6" : "Dismiss upload progress";
+    if (key === "upload.retry") return locale === "zh-CN" ? "\u91cd\u8bd5\u5931\u8d25" : "Retry failed";
     if (key === "nav.theme") return locale === "zh-CN" ? "主题" : "Theme";
     if (key === "wall.shareReady") return locale === "zh-CN" ? "\u5206\u4eab\u94fe\u63a5\u5df2\u751f\u6210\uff0c\u8bf7\u590d\u5236\u540e\u5206\u4eab" : "Share link ready; copy it to share";
     if (key === "wall.shareLink") return locale === "zh-CN" ? "\u5206\u4eab\u94fe\u63a5" : "Share link";

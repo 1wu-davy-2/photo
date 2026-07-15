@@ -42,6 +42,15 @@ export interface UploadState {
   progress: number;
 }
 
+export interface UploadQueueState {
+  total: number;
+  completed: number;
+  currentName: string;
+  currentProgress: number;
+  isPaused: boolean;
+  failed: number;
+}
+
 export interface PhotoWallItem {
   id: string;
   photo: Photo;

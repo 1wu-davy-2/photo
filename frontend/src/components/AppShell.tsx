@@ -5,6 +5,8 @@ import type { Locale, Translator } from "../i18n";
 import type { AppRoute } from "../routing";
 import { routeHref } from "../routing";
 import type { ColorTheme } from "../theme";
+import type { UploadQueueState } from "../types/photo";
+import { UploadQueuePanel } from "./UploadQueuePanel";
 
 interface AppShellProps {
   total: number;
@@ -19,10 +21,15 @@ interface AppShellProps {
   onLogout: () => void;
   theme: ColorTheme;
   onThemeChange: (theme: ColorTheme) => void;
+  uploadQueue?: UploadQueueState | null;
+  onPauseUpload?: () => void;
+  onResumeUpload?: () => void;
+  onDismissUpload?: () => void;
+  onRetryUpload?: () => void;
   children: ReactNode;
 }
 
-export function AppShell({ total, username, role, locale, route, t, onLocaleChange, onNavigate, onUpload, onLogout, theme, onThemeChange, children }: AppShellProps) {
+export function AppShell({ total, username, role, locale, route, t, onLocaleChange, onNavigate, onUpload, onLogout, theme, onThemeChange, uploadQueue, onPauseUpload, onResumeUpload, onDismissUpload, onRetryUpload, children }: AppShellProps) {
   const links: { route: AppRoute; label: string; icon: typeof Images; adminOnly?: boolean }[] = [
     { route: "home", label: t("nav.home"), icon: Images },
     { route: "manage", label: t("nav.manage"), icon: FolderKanban },
@@ -57,6 +64,7 @@ export function AppShell({ total, username, role, locale, route, t, onLocaleChan
       <div className="app-main">
         <header className="topbar"><div className="breadcrumb"><span className="breadcrumb-overline">LUMEN ARCHIVE</span><strong>{currentLabel}</strong></div><div className="topbar-actions"><div className="archive-count" aria-label={`${total} ${t("gallery.count")}`}><Images size={16} /><span>{total.toLocaleString()}</span><small>{t("gallery.count")}</small></div><button className="button button-primary button-compact" type="button" onClick={onUpload}><CloudUpload size={17} /><span>{t("nav.upload")}</span></button></div></header>
         <main className="main-content">{children}</main>
+        {uploadQueue && <UploadQueuePanel queue={uploadQueue} t={t} onPause={() => onPauseUpload?.()} onResume={() => onResumeUpload?.()} onDismiss={() => onDismissUpload?.()} onRetry={() => onRetryUpload?.()} />}
         <footer className="footer-note"><span>Lumen Archive</span><span>·</span><span>{t("brand.subtitle")}</span></footer>
       </div>
     </div>
