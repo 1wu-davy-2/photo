@@ -1,7 +1,7 @@
-import { useEffect } from "react";
-import { ChevronLeft, ChevronRight, Download, ExternalLink, Trash2, X } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Check, ChevronLeft, ChevronRight, Download, LoaderCircle, ScanSearch, Trash2, X } from "lucide-react";
 
-import { downloadPhoto, fetchPhotoBlobUrl } from "../api/client";
+import { downloadPhoto, type PhotoImageVariant } from "../api/client";
 import type { Photo } from "../types/photo";
 import type { Translator } from "../i18n";
 import { AuthenticatedImage } from "./AuthenticatedImage";
@@ -19,15 +19,23 @@ interface PhotoLightboxProps {
 }
 
 export function PhotoLightbox({ photo, hasPrevious, hasNext, onClose, onPrevious, onNext, onDelete, t, accessToken }: PhotoLightboxProps) {
+  const [variant, setVariant] = useState<PhotoImageVariant>("preview");
+  const [originalStatus, setOriginalStatus] = useState<"idle" | "loading" | "loaded">("idle");
+
   const handleDownload = async () => {
     await downloadPhoto(photo.id, photo.original_name, accessToken);
   };
 
-  const handleOpenOriginal = async () => {
-    const url = await fetchPhotoBlobUrl(photo.id, undefined, accessToken);
-    window.open(url, "_blank", "noopener,noreferrer");
-    window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  const handleViewOriginal = () => {
+    setOriginalStatus("loading");
+    setVariant("original");
   };
+
+  useEffect(() => {
+    setVariant("preview");
+    setOriginalStatus("idle");
+  }, [photo.id]);
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
@@ -53,14 +61,31 @@ export function PhotoLightbox({ photo, hasPrevious, hasNext, onClose, onPrevious
       </div>
       <div className="lightbox-stage">
         {hasPrevious && <button type="button" className="lightbox-nav prev" title={t("common.previous")} aria-label={t("common.previous")} onClick={onPrevious}><ChevronLeft size={28} /></button>}
-        <AuthenticatedImage photoId={photo.id} alt={photo.original_name} accessToken={accessToken} />
+        <AuthenticatedImage
+          photoId={photo.id}
+          alt={photo.original_name}
+          accessToken={accessToken}
+          variant={variant}
+          onLoad={() => {
+            if (variant === "original") setOriginalStatus("loaded");
+          }}
+        />
         {hasNext && <button type="button" className="lightbox-nav next" title={t("common.next")} aria-label={t("common.next")} onClick={onNext}><ChevronRight size={28} /></button>}
       </div>
       <div className="lightbox-footer">
         <div className="lightbox-meta"><span>{photo.width} × {photo.height}</span><span>{photo.mime_type.replace("image/", "").toUpperCase()}</span></div>
         <div className="lightbox-actions">
-          <button className="button button-ghost" type="button" onClick={handleDownload}><Download size={16} /> {t("common.download")}</button>
-          <button className="button button-ghost" type="button" onClick={handleOpenOriginal}><ExternalLink size={16} /> {t("common.openOriginal")}</button>
+          <button className="button button-ghost" type="button" onClick={handleDownload}><Download size={16} /> {t("common.downloadOriginal")}</button>
+          <button
+            className="button button-ghost"
+            type="button"
+            onClick={handleViewOriginal}
+            disabled={originalStatus !== "idle"}
+            aria-live="polite"
+          >
+            {originalStatus === "loading" ? <LoaderCircle className="spin" size={16} /> : originalStatus === "loaded" ? <Check size={16} /> : <ScanSearch size={16} />}
+            {t(originalStatus === "loading" ? "common.loadingOriginal" : originalStatus === "loaded" ? "common.originalLoaded" : "common.viewOriginal")}
+          </button>
           <button className="button button-danger" type="button" onClick={onDelete}><Trash2 size={16} /> {t("common.delete")}</button>
         </div>
       </div>

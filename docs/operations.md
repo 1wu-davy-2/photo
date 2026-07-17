@@ -49,4 +49,21 @@ git pull
 docker compose up -d --build
 ```
 
+## MinIO derivative buckets
+
+The application uses two buckets:
+
+- `MINIO_ORIGIN_BUCKET` keeps untouched uploads and is used by original download only.
+- `MINIO_PREVIEW_BUCKET` keeps `thumbnail.webp` and `preview.webp` derivatives.
+- `MINIO_BUCKET` remains a compatibility fallback for `MINIO_ORIGIN_BUCKET`.
+
+The MinIO application account needs read, write, delete, and bucket inspection permissions on both buckets. Existing database rows require no migration. When an old photo is requested for the first time, the backend reads its original and writes both missing derivatives to the preview bucket.
+
+Verify connectivity without exposing credentials:
+
+```bash
+curl --connect-timeout 8 http://18.221.246.24:9000/minio/health/live
+docker compose run --rm backend python -c "from app.config import Settings; from app.storage import MinioStorage; s=MinioStorage(Settings()); s.ensure_buckets(); print('minio buckets ok')"
+```
+
 本项目当前没有数据库迁移工具；首版只创建表，不会主动修改已有字段。后续变更表结构时应先增加 Alembic 迁移，再升级生产服务。

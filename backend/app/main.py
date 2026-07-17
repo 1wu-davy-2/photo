@@ -39,7 +39,8 @@ def create_app(*, settings: Settings | None = None, session_factory=None, storag
             folder_service.ensure_default_folder(default_user.id)
             for user in session.query(User).all():
                 folder_service.ensure_default_folder(user.id)
-        app_storage.ensure_bucket()
+        ensure_buckets = getattr(app_storage, "ensure_buckets", app_storage.ensure_bucket)
+        ensure_buckets()
         yield
 
     app = FastAPI(title="Lumen Archive API", version="0.1.0", lifespan=lifespan)

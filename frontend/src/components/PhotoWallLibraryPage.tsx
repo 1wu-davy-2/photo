@@ -15,7 +15,7 @@ function previewHeight(item: PhotoWallItem) {
 function PhotoWallPreview({ wall, accessToken }: { wall: PhotoWall; accessToken: string }) {
   const items = wall.items.slice(0, 6);
   return <div className="wall-card-preview" style={{ backgroundColor: wall.background_color }} aria-label={wall.name}>
-    {items.length === 0 ? <div className="wall-card-empty"><Layers3 size={25} /><span>Empty canvas</span></div> : items.map((item) => <div key={item.id} className="wall-card-item" style={{ left: `${item.x}%`, top: `${item.y}%`, width: `${item.width}%`, height: `${previewHeight(item)}%`, zIndex: item.z_index, transform: `rotate(${item.rotation}deg)` }}><AuthenticatedImage photoId={item.photo.id} alt={item.photo.original_name} accessToken={accessToken} /></div>)}
+    {items.length === 0 ? <div className="wall-card-empty"><Layers3 size={25} /><span>Empty canvas</span></div> : items.map((item) => <div key={item.id} className="wall-card-item" style={{ left: `${item.x}%`, top: `${item.y}%`, width: `${item.width}%`, height: `${previewHeight(item)}%`, zIndex: item.z_index, transform: `rotate(${item.rotation}deg)` }}><AuthenticatedImage photoId={item.photo.id} alt={item.photo.original_name} accessToken={accessToken} variant="thumbnail" /></div>)}
     {wall.items.length > items.length && <span className="wall-card-more">+{wall.items.length - items.length}</span>}
   </div>;
 }

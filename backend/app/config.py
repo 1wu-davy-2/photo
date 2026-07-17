@@ -23,6 +23,8 @@ class Settings:
     minio_access_key: str = field(default_factory=lambda: os.getenv("MINIO_ACCESS_KEY", "minioadmin"))
     minio_secret_key: str = field(default_factory=lambda: os.getenv("MINIO_SECRET_KEY", "minioadmin"))
     minio_bucket: str = field(default_factory=lambda: os.getenv("MINIO_BUCKET", "photo-gallery"))
+    minio_origin_bucket: str | None = field(default_factory=lambda: os.getenv("MINIO_ORIGIN_BUCKET") or None)
+    minio_preview_bucket: str | None = field(default_factory=lambda: os.getenv("MINIO_PREVIEW_BUCKET") or None)
     minio_secure: bool = field(default_factory=lambda: _as_bool(os.getenv("MINIO_SECURE")))
     max_upload_size_mb: int = field(
         default_factory=lambda: max(1, int(os.getenv("MAX_UPLOAD_SIZE_MB", "25")))
@@ -41,6 +43,12 @@ class Settings:
     admin_username: str = field(default_factory=lambda: os.getenv("ADMIN_USERNAME", "admin"))
     admin_password: str = field(default_factory=lambda: os.getenv("ADMIN_PASSWORD", "admin@123"))
     admin_password_hash: str = field(default_factory=lambda: os.getenv("ADMIN_PASSWORD_HASH", ""))
+
+    def __post_init__(self) -> None:
+        origin_bucket = (self.minio_origin_bucket or self.minio_bucket).strip()
+        preview_bucket = (self.minio_preview_bucket or f"{origin_bucket}-preview").strip()
+        object.__setattr__(self, "minio_origin_bucket", origin_bucket)
+        object.__setattr__(self, "minio_preview_bucket", preview_bucket)
 
     @property
     def max_upload_size_bytes(self) -> int:

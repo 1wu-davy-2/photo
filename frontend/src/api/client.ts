@@ -3,6 +3,8 @@ import { clearSession, getAccessToken, type AuthSession } from "../auth/session"
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "";
 
+export type PhotoImageVariant = "thumbnail" | "preview" | "original";
+
 function notifyUnauthorized(): void {
   clearSession();
   window.dispatchEvent(new Event("auth-expired"));
@@ -134,8 +136,8 @@ export function renamePhoto(id: string, name: string, accessToken?: string): Pro
   return request<Photo>(`/api/photos/${id}/name`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name }) }, accessToken);
 }
 
-export async function fetchPhotoBlobUrl(id: string, signal?: AbortSignal, accessToken?: string): Promise<string> {
-  const response = await fetch(`${API_BASE}/api/photos/${id}/content`, withAuth({ signal }, accessToken));
+async function fetchBlobUrl(path: string, signal?: AbortSignal, accessToken?: string): Promise<string> {
+  const response = await fetch(`${API_BASE}${path}`, withAuth({ signal }, accessToken));
   if (response.status === 401) {
     notifyUnauthorized();
     throw new Error("Your session has expired");
@@ -144,8 +146,20 @@ export async function fetchPhotoBlobUrl(id: string, signal?: AbortSignal, access
   return URL.createObjectURL(await response.blob());
 }
 
+export async function fetchPhotoBlobUrl(
+  id: string,
+  variant: PhotoImageVariant = "preview",
+  signal?: AbortSignal,
+  accessToken?: string,
+): Promise<string> {
+  const query = variant === "original"
+    ? "original=true"
+    : `width=${variant === "thumbnail" ? 300 : 1920}`;
+  return fetchBlobUrl(`/api/photos/${encodeURIComponent(id)}/content?${query}`, signal, accessToken);
+}
+
 export async function downloadPhoto(id: string, filename: string, accessToken?: string): Promise<void> {
-  const url = await fetchPhotoBlobUrl(id, undefined, accessToken);
+  const url = await fetchBlobUrl(`/api/photos/${encodeURIComponent(id)}/download`, undefined, accessToken);
   const anchor = document.createElement("a");
   anchor.href = url;
   anchor.download = filename;

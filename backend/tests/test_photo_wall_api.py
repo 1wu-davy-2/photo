@@ -45,7 +45,9 @@ def test_photo_wall_layout_and_public_share(test_app, image_bytes):
     assert public.json()["items"][0]["photo"]["id"] == photo_id
     assert public.json()["items"][0]["height"] == 36
     assert content.status_code == 200
-    assert content.content == image_bytes
+    assert content.headers["content-type"].startswith("image/webp")
+    assert "immutable" in content.headers["cache-control"]
+    assert content.content != image_bytes
 
 
 def test_photo_wall_rejects_invalid_background_color(test_app):

@@ -32,6 +32,10 @@ export function saveLocale(locale: Locale): void {
 
 export function translate(locale: Locale): Translator {
   return (key: string) => {
+    if (key === "common.viewOriginal") return locale === "zh-CN" ? "\u67e5\u770b\u539f\u56fe" : "View original";
+    if (key === "common.loadingOriginal") return locale === "zh-CN" ? "\u6b63\u5728\u52a0\u8f7d\u539f\u56fe" : "Loading original";
+    if (key === "common.originalLoaded") return locale === "zh-CN" ? "\u5df2\u52a0\u8f7d\u539f\u56fe" : "Original loaded";
+    if (key === "common.downloadOriginal") return locale === "zh-CN" ? "\u4e0b\u8f7d\u539f\u56fe" : "Download original";
     if (key === "upload.confirmEyebrow") return locale === "zh-CN" ? "\u4e0a\u4f20\u786e\u8ba4" : "Upload confirmation";
     if (key === "upload.confirmTitle") return locale === "zh-CN" ? "\u786e\u8ba4\u4e0a\u4f20\u7167\u7247" : "Confirm photo upload";
     if (key === "upload.confirmDescription") return locale === "zh-CN" ? "\u68c0\u6d4b\u5230\u4ee5\u4e0b\u7167\u7247\uff0c\u786e\u8ba4\u540e\u5f00\u59cb\u4e0a\u4f20\u3002" : "These photos are ready to upload. Start when you are ready.";

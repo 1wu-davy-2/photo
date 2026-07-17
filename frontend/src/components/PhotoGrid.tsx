@@ -34,7 +34,7 @@ export function PhotoGrid({ photos, onSelect, t, accessToken }: PhotoGridProps) 
           onClick={() => onSelect(photo)}
         >
           <span className="photo-image-wrap">
-            <AuthenticatedImage photoId={photo.id} alt={photo.original_name} loading={index < 6 ? "eager" : "lazy"} accessToken={accessToken} />
+            <AuthenticatedImage photoId={photo.id} alt={photo.original_name} loading={index < 6 ? "eager" : "lazy"} accessToken={accessToken} variant="thumbnail" />
             <span className="photo-card-shade" />
             <span className="photo-card-open"><Maximize2 size={16} /></span>
           </span>

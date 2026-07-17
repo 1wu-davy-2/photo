@@ -1,17 +1,19 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
+from functools import partial
 from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile, status
 from fastapi.responses import Response, StreamingResponse
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 
 from ..auth import AuthenticatedUser, require_current_user
 from ..models import Photo
 from ..schemas import PhotoListResponse, PhotoMoveRequest, PhotoRead, PhotoRenameRequest
 from ..services.folders import FolderNotFoundError
-from ..services.photos import PhotoNotFoundError, PhotoService, PhotoValidationError
+from ..services.photos import PhotoContent, PhotoNotFoundError, PhotoService, PhotoValidationError
 
 router = APIRouter(prefix="/photos", tags=["photos"], dependencies=[Depends(require_current_user)])
 
@@ -83,40 +85,56 @@ async def upload_photo(
 ):
     try:
         payload = await _read_upload_with_limit(file, max_bytes=service.settings.max_upload_size_bytes)
-        photo = service.upload(
-            owner_id=current_user.id,
-            filename=file.filename or "untitled-image",
-            content_type=file.content_type,
-            payload=payload,
-            folder_id=folder_id,
+        photo = await run_in_threadpool(
+            partial(
+                service.upload,
+                owner_id=current_user.id,
+                filename=file.filename or "untitled-image",
+                content_type=file.content_type,
+                payload=payload,
+                folder_id=folder_id,
+            )
         )
         return _photo_response(photo)
     except (PhotoValidationError, FolderNotFoundError) as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
 
 
-def _content_response(photo: Photo, service: PhotoService, *, download: bool):
-    try:
-        object_response = service.storage.get_object(photo.object_key)
-    except Exception as error:
-        raise HTTPException(status_code=404, detail="Photo content not found") from error
-    headers = {"Cache-Control": "private, max-age=3600"}
+def _content_response(photo: Photo, content: PhotoContent, *, download: bool):
+    headers = {
+        "Cache-Control": (
+            "private, max-age=3600"
+            if content.is_original
+            else "private, max-age=31536000, immutable"
+        )
+    }
     if download:
         headers["Content-Disposition"] = f"attachment; filename*=UTF-8''{quote(photo.original_name)}"
-    return StreamingResponse(_stream_object(object_response), media_type=photo.mime_type, headers=headers)
+    return StreamingResponse(
+        _stream_object(content.object_response),
+        media_type=content.media_type,
+        headers=headers,
+    )
 
 
 @router.get("/{photo_id}/content")
 def photo_content(
     photo_id: str,
+    width: int = Query(default=1920),
+    original: bool = Query(default=False),
     current_user: AuthenticatedUser = Depends(require_current_user),
     service: PhotoService = Depends(get_service),
 ):
+    if width not in {300, 1920}:
+        raise HTTPException(status_code=422, detail="width must be 300 or 1920")
     try:
         photo = service.get(photo_id, owner_id=None if current_user.role == "admin" else current_user.id)
+        content = service.open_content(photo, width=width, original=original)
     except PhotoNotFoundError as error:
         raise HTTPException(status_code=404, detail="Photo not found") from error
-    return _content_response(photo, service, download=False)
+    except Exception as error:
+        raise HTTPException(status_code=404, detail="Photo content not found") from error
+    return _content_response(photo, content, download=False)
 
 
 @router.get("/{photo_id}/download")
@@ -127,9 +145,12 @@ def download_photo(
 ):
     try:
         photo = service.get(photo_id, owner_id=None if current_user.role == "admin" else current_user.id)
+        content = service.open_content(photo, original=True)
     except PhotoNotFoundError as error:
         raise HTTPException(status_code=404, detail="Photo not found") from error
-    return _content_response(photo, service, download=True)
+    except Exception as error:
+        raise HTTPException(status_code=404, detail="Photo content not found") from error
+    return _content_response(photo, content, download=True)
 
 
 @router.patch("/{photo_id}/folder", response_model=PhotoRead)

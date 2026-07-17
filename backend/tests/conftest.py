@@ -27,26 +27,55 @@ class MemoryObject:
 
 class MemoryStorage:
     def __init__(self):
-        self.objects: dict[str, bytes] = {}
+        self.origin_objects: dict[str, bytes] = {}
+        self.preview_objects: dict[str, bytes] = {}
+        self.preview_put_count = 0
+        self.fail_preview_put_at: int | None = None
 
     def ensure_bucket(self):
         return None
 
+    def ensure_buckets(self):
+        return None
+
+    def put_origin(self, object_key: str, payload: bytes, content_type: str):
+        self.origin_objects[object_key] = payload
+
+    def put_preview(self, object_key: str, payload: bytes, content_type: str):
+        self.preview_put_count += 1
+        if self.fail_preview_put_at == self.preview_put_count:
+            raise RuntimeError("preview storage failed")
+        self.preview_objects[object_key] = payload
+
+    def get_origin(self, object_key: str):
+        if object_key not in self.origin_objects:
+            raise KeyError(object_key)
+        return MemoryObject(self.origin_objects[object_key])
+
+    def get_preview(self, object_key: str):
+        if object_key not in self.preview_objects:
+            raise KeyError(object_key)
+        return MemoryObject(self.preview_objects[object_key])
+
+    def remove_origin(self, object_key: str):
+        self.origin_objects.pop(object_key, None)
+
+    def remove_preview(self, object_key: str):
+        self.preview_objects.pop(object_key, None)
+
     def put_object(self, object_key: str, payload: bytes, content_type: str):
-        self.objects[object_key] = payload
+        self.put_origin(object_key, payload, content_type)
 
     def get_object(self, object_key: str):
-        if object_key not in self.objects:
-            raise KeyError(object_key)
-        return MemoryObject(self.objects[object_key])
+        return self.get_origin(object_key)
 
     def remove_object(self, object_key: str):
-        self.objects.pop(object_key, None)
+        self.remove_origin(object_key)
 
     def move_object(self, object_key: str, new_object_key: str):
-        if object_key not in self.objects:
+        if object_key not in self.origin_objects:
             raise KeyError(object_key)
-        self.objects[new_object_key] = self.objects.pop(object_key)
+        self.origin_objects[new_object_key] = self.origin_objects.pop(object_key)
 
 
 @pytest.fixture

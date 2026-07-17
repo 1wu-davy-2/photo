@@ -11,7 +11,7 @@ from ..auth import AuthenticatedUser, require_current_user
 from ..models import Photo, PhotoWall
 from ..schemas import PhotoRead, PhotoWallCreate, PhotoWallItemRead, PhotoWallLayoutUpdate, PhotoWallRead, PhotoWallShareRead, PhotoWallUpdate
 from ..services.photo_walls import PhotoWallNotFoundError, PhotoWallService, PhotoWallValidationError
-from ..services.photos import PhotoNotFoundError
+from ..services.photos import PhotoNotFoundError, PhotoService
 
 router = APIRouter(prefix="/photo-walls", tags=["photo-walls"])
 public_router = APIRouter(prefix="/photo-wall-shares", tags=["photo-wall-shares"])
@@ -119,9 +119,20 @@ def get_public_photo(token: str, photo_id: str, request: Request, session: Sessi
         photo = session.get(Photo, photo_id)
         if photo is None:
             raise PhotoNotFoundError(photo_id)
-        object_response = request.app.state.storage.get_object(photo.object_key)
+        content = PhotoService(
+            session,
+            request.app.state.storage,
+            request.app.state.settings,
+        ).open_content(photo, width=1920)
     except (PhotoWallNotFoundError, PhotoNotFoundError) as error:
         raise HTTPException(status_code=404, detail="Shared photo not found") from error
     except Exception as error:
         raise HTTPException(status_code=404, detail="Shared photo content not found") from error
-    return StreamingResponse(_stream_object(object_response), media_type=photo.mime_type, headers={"Cache-Control": "public, max-age=300", "Content-Disposition": f"inline; filename*=UTF-8''{quote(photo.original_name)}"})
+    return StreamingResponse(
+        _stream_object(content.object_response),
+        media_type=content.media_type,
+        headers={
+            "Cache-Control": "public, max-age=31536000, immutable",
+            "Content-Disposition": f"inline; filename*=UTF-8''{quote(photo.original_name)}",
+        },
+    )

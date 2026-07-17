@@ -7,10 +7,12 @@ from dataclasses import dataclass
 from io import BytesIO
 
 from PIL import Image, UnidentifiedImageError
+from minio.error import S3Error
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from ..config import Settings
+from ..image_processing import ImageDerivatives, generate_derivatives
 from ..models import Folder, Photo, PhotoWallItem
 from .folders import FolderNotFoundError, FolderService
 
@@ -45,6 +47,13 @@ class ImageMetadata:
     width: int
     height: int
     checksum: str
+
+
+@dataclass(frozen=True)
+class PhotoContent:
+    object_response: object
+    media_type: str
+    is_original: bool
 
 
 def inspect_image(*, filename: str, content_type: str | None, payload: bytes, max_bytes: int) -> ImageMetadata:
@@ -96,6 +105,70 @@ class PhotoService:
     def _object_key(folder_id: str, photo_id: str, filename: str) -> str:
         return f"folders/{folder_id}/{photo_id}.{PhotoService._extension(filename)}"
 
+    @staticmethod
+    def thumbnail_key(photo_id: str) -> str:
+        return f"derived/{photo_id}/thumbnail.webp"
+
+    @staticmethod
+    def preview_key(photo_id: str) -> str:
+        return f"derived/{photo_id}/preview.webp"
+
+    @staticmethod
+    def _remove_written_objects(storage, objects: list[tuple[str, str]]) -> None:
+        for kind, object_key in reversed(objects):
+            try:
+                if kind == "origin":
+                    storage.remove_origin(object_key)
+                else:
+                    storage.remove_preview(object_key)
+            except Exception:
+                pass
+
+    @staticmethod
+    def _read_object(object_response) -> bytes:
+        try:
+            chunks: list[bytes] = []
+            while chunk := object_response.read(1024 * 1024):
+                chunks.append(chunk)
+            return b"".join(chunks)
+        finally:
+            object_response.close()
+            release_conn = getattr(object_response, "release_conn", None)
+            if release_conn:
+                release_conn()
+
+    @staticmethod
+    def _is_missing_object(error: Exception) -> bool:
+        return isinstance(error, KeyError) or isinstance(error, S3Error) and error.code in {
+            "NoSuchKey",
+            "NoSuchObject",
+            "NoSuchBucket",
+        }
+
+    def _store_derivatives(self, photo_id: str, derivatives: ImageDerivatives) -> None:
+        thumbnail_key = self.thumbnail_key(photo_id)
+        preview_key = self.preview_key(photo_id)
+        planned = [("preview", thumbnail_key), ("preview", preview_key)]
+        try:
+            self.storage.put_preview(
+                thumbnail_key,
+                derivatives.thumbnail.payload,
+                derivatives.thumbnail.media_type,
+            )
+            self.storage.put_preview(
+                preview_key,
+                derivatives.preview.payload,
+                derivatives.preview.media_type,
+            )
+        except Exception:
+            self._remove_written_objects(self.storage, planned)
+            raise
+
+    def _generate_missing_derivatives(self, photo: Photo) -> None:
+        original = self.storage.get_origin(photo.object_key)
+        derivatives = generate_derivatives(self._read_object(original))
+        self._store_derivatives(photo.id, derivatives)
+
     def upload(self, *, owner_id: str, filename: str, content_type: str | None, payload: bytes, folder_id: str | None = None) -> Photo:
         safe_name = self._safe_filename(filename)
         metadata = inspect_image(
@@ -105,6 +178,7 @@ class PhotoService:
             max_bytes=self.settings.max_upload_size_bytes,
         )
         photo_id = str(uuid.uuid4())
+        derivatives = generate_derivatives(payload)
         folder = None
         if folder_id is not None:
             folder = self.session.scalar(select(Folder).where(Folder.id == folder_id, Folder.owner_id == owner_id))
@@ -127,16 +201,49 @@ class PhotoService:
             folder_id=folder.id,
         )
 
-        self.storage.put_object(object_key, payload, metadata.mime_type)
+        planned_objects = [
+            ("origin", object_key),
+            ("preview", self.thumbnail_key(photo_id)),
+            ("preview", self.preview_key(photo_id)),
+        ]
         try:
+            self.storage.put_origin(object_key, payload, metadata.mime_type)
+            self.storage.put_preview(
+                self.thumbnail_key(photo_id),
+                derivatives.thumbnail.payload,
+                derivatives.thumbnail.media_type,
+            )
+            self.storage.put_preview(
+                self.preview_key(photo_id),
+                derivatives.preview.payload,
+                derivatives.preview.media_type,
+            )
             self.session.add(photo)
             self.session.commit()
             self.session.refresh(photo)
         except Exception:
             self.session.rollback()
-            self.storage.remove_object(object_key)
+            self._remove_written_objects(self.storage, planned_objects)
             raise
         return photo
+
+    def open_content(self, photo: Photo, *, width: int = 1920, original: bool = False) -> PhotoContent:
+        if original:
+            return PhotoContent(
+                object_response=self.storage.get_origin(photo.object_key),
+                media_type=photo.mime_type,
+                is_original=True,
+            )
+
+        object_key = self.thumbnail_key(photo.id) if width == 300 else self.preview_key(photo.id)
+        try:
+            object_response = self.storage.get_preview(object_key)
+        except Exception as error:
+            if not self._is_missing_object(error):
+                raise
+            self._generate_missing_derivatives(photo)
+            object_response = self.storage.get_preview(object_key)
+        return PhotoContent(object_response=object_response, media_type="image/webp", is_original=False)
 
     def list(
         self,
@@ -211,7 +318,9 @@ class PhotoService:
 
     def delete(self, photo_id: str, *, owner_id: str | None = None) -> None:
         photo = self.get(photo_id, owner_id=owner_id)
-        self.storage.remove_object(photo.object_key)
+        self.storage.remove_origin(photo.object_key)
+        self.storage.remove_preview(self.thumbnail_key(photo.id))
+        self.storage.remove_preview(self.preview_key(photo.id))
         self.session.execute(delete(PhotoWallItem).where(PhotoWallItem.photo_id == photo.id))
         self.session.delete(photo)
         self.session.commit()

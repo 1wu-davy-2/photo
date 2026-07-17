@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-import { fetchPhotoBlobUrl } from "../api/client";
+import { fetchPhotoBlobUrl, type PhotoImageVariant } from "../api/client";
 
 interface BlobCacheEntry {
   promise: Promise<string>;
@@ -12,8 +12,8 @@ interface BlobCacheEntry {
 
 const blobCache = new Map<string, BlobCacheEntry>();
 
-function acquirePhotoBlob(photoId: string, accessToken: string): { promise: Promise<string>; release: () => void } {
-  const key = `${photoId}:${accessToken}`;
+function acquirePhotoBlob(photoId: string, variant: PhotoImageVariant, accessToken: string): { promise: Promise<string>; release: () => void } {
+  const key = `${photoId}:${variant}:${accessToken}`;
   let entry = blobCache.get(key);
   if (!entry) {
     const controller = new AbortController();
@@ -22,7 +22,7 @@ function acquirePhotoBlob(photoId: string, accessToken: string): { promise: Prom
       refCount: 0,
       objectUrl: null,
       releaseTimer: null,
-      promise: fetchPhotoBlobUrl(photoId, controller.signal, accessToken),
+      promise: fetchPhotoBlobUrl(photoId, variant, controller.signal, accessToken),
     };
     entry = nextEntry;
     blobCache.set(key, nextEntry);
@@ -62,14 +62,16 @@ interface AuthenticatedImageProps {
   className?: string;
   loading?: "eager" | "lazy";
   accessToken: string;
+  variant?: PhotoImageVariant;
+  onLoad?: () => void;
 }
 
-export function AuthenticatedImage({ photoId, alt, className, loading, accessToken }: AuthenticatedImageProps) {
+export function AuthenticatedImage({ photoId, alt, className, loading, accessToken, variant = "thumbnail", onLoad }: AuthenticatedImageProps) {
   const [src, setSrc] = useState<string | null>(null);
 
   useEffect(() => {
     setSrc(null);
-    const { promise, release } = acquirePhotoBlob(photoId, accessToken);
+    const { promise, release } = acquirePhotoBlob(photoId, variant, accessToken);
     let active = true;
     promise
       .then((url) => {
@@ -80,8 +82,8 @@ export function AuthenticatedImage({ photoId, alt, className, loading, accessTok
       active = false;
       release();
     };
-  }, [photoId, accessToken]);
+  }, [photoId, variant, accessToken]);
 
   if (!src) return <span className="authenticated-image-loading" aria-label={`Loading ${alt}`} />;
-  return <img className={className} src={src} alt={alt} loading={loading} />;
+  return <img className={className} src={src} alt={alt} loading={loading} onLoad={onLoad} />;
 }

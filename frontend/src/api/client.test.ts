@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { createPhotoWall, fetchPhotoBlobUrl, uploadPhoto } from "./client";
+import { createPhotoWall, downloadPhoto, fetchPhotoBlobUrl, uploadPhoto } from "./client";
 
 describe("photo content authentication", () => {
   beforeEach(() => {
@@ -13,11 +13,29 @@ describe("photo content authentication", () => {
     vi.restoreAllMocks();
   });
 
-  it("uses the login token explicitly passed to the content request", async () => {
-    await fetchPhotoBlobUrl("photo-1", undefined, "login-token");
+  it.each([
+    ["thumbnail", "width=300"],
+    ["preview", "width=1920"],
+    ["original", "original=true"],
+  ] as const)("requests the %s image variant with an explicit token", async (variant, query) => {
+    await fetchPhotoBlobUrl("photo-1", variant, undefined, "login-token");
 
-    const [, init] = vi.mocked(fetch).mock.calls[0];
+    const calls = vi.mocked(fetch).mock.calls;
+    const [url, init] = calls[calls.length - 1];
+    expect(String(url)).toContain(`/api/photos/photo-1/content?${query}`);
     expect(new Headers(init?.headers).get("Authorization")).toBe("Bearer login-token");
+  });
+
+  it("downloads from the original-only download endpoint", async () => {
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
+
+    await downloadPhoto("photo-1", "original.png", "login-token");
+
+    const calls = vi.mocked(fetch).mock.calls;
+    const [url, init] = calls[calls.length - 1];
+    expect(String(url)).toContain("/api/photos/photo-1/download");
+    expect(new Headers(init?.headers).get("Authorization")).toBe("Bearer login-token");
+    expect(click).toHaveBeenCalledOnce();
   });
 
   it("includes the selected folder when uploading a file", async () => {

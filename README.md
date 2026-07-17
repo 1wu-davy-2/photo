@@ -31,7 +31,7 @@ docker compose up -d --build
 
 5. 打开 `http://你的服务器IP:6222`。后端健康检查地址为 `http://你的服务器IP:6555/api/health`。
 
-首次启动时，后端会自动创建 `MINIO_BUCKET` 指定的 bucket、`users` 用户表和 `photos` 数据表。也可以先手动执行 [`backend/sql/001_initial_schema.sql`](<E:/opt/vide coding/backend/sql/001_initial_schema.sql>)；已有旧版本数据库执行 [`backend/sql/002_users_table.sql`](<E:/opt/vide coding/backend/sql/002_users_table.sql>)。MinIO 服务必须提前可用，MariaDB 用户必须有创建表的权限。
+首次启动时，后端会检查 `MINIO_ORIGIN_BUCKET` 和 `MINIO_PREVIEW_BUCKET` 指定的两个 bucket，并创建 `users` 用户表和 `photos` 数据表。`MINIO_BUCKET` 仅作为旧配置的原图 bucket 回退值。也可以先手动执行 [`backend/sql/001_initial_schema.sql`](backend/sql/001_initial_schema.sql)；已有旧版本数据库执行 [`backend/sql/002_users_table.sql`](backend/sql/002_users_table.sql)。MinIO 服务必须提前可用，MariaDB 用户必须有创建表的权限。
 
 登录账号来自 MariaDB `users` 表，不再直接依赖配置密码。首次启动会幂等创建默认 `admin` 用户，密码使用 `.env` 中的 PBKDF2 哈希作为初始化值；当前密码为你提供的 `admin@123`。之后登录校验、用户禁用和权限校验都读取数据库记录。Token 默认 60 分钟有效，修改 `AUTH_TOKEN_TTL_MINUTES` 可调整。
 
