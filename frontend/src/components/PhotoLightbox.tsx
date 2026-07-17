@@ -13,7 +13,7 @@ interface PhotoLightboxProps {
   onClose: () => void;
   onPrevious: () => void;
   onNext: () => void;
-  onDelete: () => void;
+  onDelete?: () => void;
   t: Translator;
   accessToken: string;
 }
@@ -86,7 +86,7 @@ export function PhotoLightbox({ photo, hasPrevious, hasNext, onClose, onPrevious
             {originalStatus === "loading" ? <LoaderCircle className="spin" size={16} /> : originalStatus === "loaded" ? <Check size={16} /> : <ScanSearch size={16} />}
             {t(originalStatus === "loading" ? "common.loadingOriginal" : originalStatus === "loaded" ? "common.originalLoaded" : "common.viewOriginal")}
           </button>
-          <button className="button button-danger" type="button" onClick={onDelete}><Trash2 size={16} /> {t("common.delete")}</button>
+          {onDelete && <button className="button button-danger" type="button" onClick={onDelete}><Trash2 size={16} /> {t("common.delete")}</button>}
         </div>
       </div>
     </div>

@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import Moveable from "react-moveable";
 import type { OnDrag, OnResize, OnRotate } from "react-moveable";
-import { ArrowLeft, Check, Copy, Expand, ImagePlus, LayoutTemplate, LoaderCircle, Palette, Plus, Save, Share2, Trash2, X } from "lucide-react";
+import { ArrowLeft, Check, Copy, Download, Expand, Eye, ImagePlus, LayoutTemplate, LoaderCircle, Palette, Plus, Save, Share2, Trash2, X } from "lucide-react";
 
-import { createPhotoWall, createPhotoWallShare, getPhotoWall, listPhotoWalls, listPhotos, savePhotoWallLayout, updatePhotoWall } from "../api/client";
+import { createPhotoWall, createPhotoWallShare, downloadPhoto, getPhotoWall, listPhotoWalls, listPhotos, savePhotoWallLayout, updatePhotoWall } from "../api/client";
 import type { Translator } from "../i18n";
 import { AuthenticatedImage } from "./AuthenticatedImage";
+import { PhotoLightbox } from "./PhotoLightbox";
 import type { Photo, PhotoWall, PhotoWallItem } from "../types/photo";
 
 interface PhotoWallPageProps {
@@ -175,6 +176,7 @@ export function PhotoWallPage({ t, accessToken, wallId, onBack }: PhotoWallPageP
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
   const [shareUrl, setShareUrl] = useState("");
+  const [viewingPhoto, setViewingPhoto] = useState<Photo | null>(null);
   const initializedKeyRef = useRef<string | null>(null);
   const initializationPromiseRef = useRef<{ key: string; promise: Promise<void> } | null>(null);
   const activeInitializationKeyRef = useRef<string | null>(null);
@@ -189,6 +191,7 @@ export function PhotoWallPage({ t, accessToken, wallId, onBack }: PhotoWallPageP
     setWall(nextWall);
     setItems(normalizeItems(nextWall.items));
     setSelectedId(null);
+    setViewingPhoto(null);
     setShareUrl("");
   }, [accessToken]);
 
@@ -310,6 +313,16 @@ export function PhotoWallPage({ t, accessToken, wallId, onBack }: PhotoWallPageP
     try { const created = await createPhotoWallShare(wall.id, accessToken); const url = `${window.location.origin}${created.path}`; setShareUrl(url); await copyShareUrl(url); } catch (requestError) { setError(requestError instanceof Error ? requestError.message : t("manage.error")); }
   };
 
+  const downloadSelectedPhoto = async () => {
+    if (!selectedItem) return;
+    setError("");
+    try {
+      await downloadPhoto(selectedItem.photo.id, selectedItem.photo.original_name, accessToken);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : t("manage.error"));
+    }
+  };
+
   if (isLoading) return <section className="wall-loading"><LoaderCircle className="spin" size={24} /> {t("wall.loading")}</section>;
   return <section className="workspace-page photo-wall-page">
     <div className="page-heading wall-heading"><div><span className="eyebrow"><span className="live-dot" /> {t("wall.eyebrow")}</span><h1>{t("wall.title")}</h1><p>{t("wall.description")}</p></div><div className="wall-toolbar">{onBack && <button className="button button-ghost" type="button" onClick={onBack}><ArrowLeft size={16} /> {t("wall.back")}</button>}<button className="button button-ghost" type="button" onClick={() => void createWall()}><Plus size={16} /> {t("wall.newWall")}</button><button className="button button-ghost" type="button" onClick={() => void renameWall()} disabled={!wall}><LayoutTemplate size={16} /> {t("wall.rename")}</button><button className="button button-primary" type="button" onClick={() => void save()} disabled={!wall || isSaving}><Save size={16} /> {isSaving ? t("wall.saving") : t("wall.save")}</button><button className="button button-soft" type="button" onClick={() => void share()} disabled={!wall}><Share2 size={16} /> {t("wall.share")}</button></div></div>
@@ -317,6 +330,7 @@ export function PhotoWallPage({ t, accessToken, wallId, onBack }: PhotoWallPageP
     <div className="wall-layout"><aside className="wall-sidebar"><div className="wall-panel-heading"><span>{t("wall.selectWall")}</span><span>{walls.length}</span></div><select className="wall-select" value={wall?.id ?? ""} onChange={(event) => void loadWall(event.target.value)}>{walls.map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.name}</option>)}</select>
       <div className="wall-background-panel"><div className="wall-panel-heading"><span><Palette size={14} /> {t("wall.background")}</span><span className="wall-color-sample" style={{ backgroundColor: wall?.background_color }} /></div><label className="wall-color-picker"><span>{t("wall.backgroundColor")}</span><input type="color" aria-label={t("wall.backgroundColor")} value={wall?.background_color ?? "#F6FAFF"} onChange={(event) => updateBackground(event.target.value)} /></label><small className="wall-color-hint">{t("wall.colorHint")}</small><div className="wall-color-presets">{BACKGROUND_PRESETS.map((color) => <button key={color} className={`wall-color-swatch ${wall?.background_color.toUpperCase() === color ? "is-active" : ""}`} type="button" title={color} aria-label={`${t("wall.backgroundColor")} ${color}`} style={{ backgroundColor: color }} onClick={() => updateBackground(color)}>{wall?.background_color.toUpperCase() === color && <Check size={12} />}</button>)}</div></div>
       <div className="wall-panel-heading"><span>{t("wall.assets")}</span><span>{availablePhotos.length}</span></div><div className="wall-assets">{availablePhotos.length === 0 ? <div className="wall-empty">{t("wall.emptyAssets")}</div> : availablePhotos.map((photo) => <button key={photo.id} className="wall-asset" type="button" draggable onDragStart={(event) => { event.dataTransfer.setData("application/x-photo-id", photo.id); event.dataTransfer.effectAllowed = "copy"; }} onClick={() => addPhoto(photo.id)}><AuthenticatedImage photoId={photo.id} alt={photo.original_name} loading="lazy" accessToken={accessToken} variant="thumbnail" /><span><strong>{photo.original_name}</strong><small>{t("wall.add")}</small></span><ImagePlus size={15} /></button>)}</div>
-    </aside><div className="wall-workspace">{wall && <PhotoWallCanvas wall={wall} items={items} accessToken={accessToken} selectedId={selectedId} onSelect={setSelectedId} onDrop={handleCanvasDrop} onRemove={(id) => { setItems((current) => current.filter((item) => item.id !== id)); setSelectedId(null); }} onItemChange={updateItem} />}</div><aside className="wall-inspector">{selectedItem ? <><div className="wall-panel-heading"><span>{t("wall.selected")}</span><button className="icon-button subtle" type="button" aria-label={t("common.close")} title={t("common.close")} onClick={() => setSelectedId(null)}><X size={15} /></button></div><div className="inspector-preview"><AuthenticatedImage photoId={selectedItem.photo.id} alt={selectedItem.photo.original_name} accessToken={accessToken} variant="thumbnail" /></div><strong className="inspector-name">{selectedItem.photo.original_name}</strong><div className="inspector-dimensions"><label className="number-field"><span>{t("wall.width")}</span><div><input type="number" aria-label={t("wall.width")} min="6" max="100" step="1" value={Math.round(selectedItem.width)} onChange={(event) => updateSelected("width", Number(event.target.value))} /><em>%</em></div></label><label className="number-field"><span>{t("wall.height")}</span><div><input type="number" aria-label={t("wall.height")} min="6" max="100" step="1" value={Math.round(selectedItem.height)} onChange={(event) => updateSelected("height", Number(event.target.value))} /><em>%</em></div></label></div><label className="range-field"><span>{t("wall.rotation")} <b>{Math.round(selectedItem.rotation)}°</b></span><input type="range" min="-180" max="180" value={selectedItem.rotation} onChange={(event) => updateSelected("rotation", Number(event.target.value))} /></label><button className="button button-danger wall-remove" type="button" onClick={() => { setItems((current) => current.filter((item) => item.id !== selectedItem.id)); setSelectedId(null); }}><Trash2 size={15} /> {t("wall.remove")}</button></> : <div className="inspector-empty"><Expand size={25} /><strong>{t("wall.selectHint")}</strong><span>{t("wall.selectHintDescription")}</span></div>}</aside></div>
+    </aside><div className="wall-workspace">{wall && <PhotoWallCanvas wall={wall} items={items} accessToken={accessToken} selectedId={selectedId} onSelect={setSelectedId} onDrop={handleCanvasDrop} onRemove={(id) => { setItems((current) => current.filter((item) => item.id !== id)); setSelectedId(null); }} onItemChange={updateItem} />}</div><aside className="wall-inspector">{selectedItem ? <><div className="wall-panel-heading"><span>{t("wall.selected")}</span><button className="icon-button subtle" type="button" aria-label={t("common.close")} title={t("common.close")} onClick={() => setSelectedId(null)}><X size={15} /></button></div><div className="inspector-preview"><AuthenticatedImage photoId={selectedItem.photo.id} alt={selectedItem.photo.original_name} accessToken={accessToken} variant="thumbnail" /></div><strong className="inspector-name">{selectedItem.photo.original_name}</strong><div className="wall-photo-actions"><button className="button button-ghost" type="button" onClick={() => setViewingPhoto(selectedItem.photo)}><Eye size={15} /> {t("wall.viewPhoto")}</button><button className="button button-ghost" type="button" onClick={() => void downloadSelectedPhoto()}><Download size={15} /> {t("common.downloadOriginal")}</button></div><div className="inspector-dimensions"><label className="number-field"><span>{t("wall.width")}</span><div><input type="number" aria-label={t("wall.width")} min="6" max="100" step="1" value={Math.round(selectedItem.width)} onChange={(event) => updateSelected("width", Number(event.target.value))} /><em>%</em></div></label><label className="number-field"><span>{t("wall.height")}</span><div><input type="number" aria-label={t("wall.height")} min="6" max="100" step="1" value={Math.round(selectedItem.height)} onChange={(event) => updateSelected("height", Number(event.target.value))} /><em>%</em></div></label></div><label className="range-field"><span>{t("wall.rotation")} <b>{Math.round(selectedItem.rotation)}°</b></span><input type="range" min="-180" max="180" value={selectedItem.rotation} onChange={(event) => updateSelected("rotation", Number(event.target.value))} /></label><button className="button button-danger wall-remove" type="button" onClick={() => { setItems((current) => current.filter((item) => item.id !== selectedItem.id)); setSelectedId(null); }}><Trash2 size={15} /> {t("wall.remove")}</button></> : <div className="inspector-empty"><Expand size={25} /><strong>{t("wall.selectHint")}</strong><span>{t("wall.selectHintDescription")}</span></div>}</aside></div>
+    {viewingPhoto && <PhotoLightbox photo={viewingPhoto} hasPrevious={false} hasNext={false} onClose={() => setViewingPhoto(null)} onPrevious={() => undefined} onNext={() => undefined} t={t} accessToken={accessToken} />}
   </section>;
 }

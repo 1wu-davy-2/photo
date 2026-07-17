@@ -1,5 +1,5 @@
-import { fireEvent, render, screen } from "@testing-library/react";
-import { expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, expect, it, vi } from "vitest";
 
 import type { Photo } from "../types/photo";
 import { PhotoLightbox } from "./PhotoLightbox";
@@ -30,6 +30,8 @@ const labels: Record<string, string> = {
   "common.downloadOriginal": "\u4e0b\u8f7d\u539f\u56fe",
 };
 
+afterEach(cleanup);
+
 it("loads the original inside the current lightbox", () => {
   render(
     <PhotoLightbox
@@ -54,4 +56,22 @@ it("loads the original inside the current lightbox", () => {
 
   fireEvent.click(screen.getByRole("button", { name: "loaded-photo" }));
   expect(screen.getByRole("button", { name: "\u5df2\u52a0\u8f7d\u539f\u56fe" })).toBeDisabled();
+});
+
+it("can be used as a non-destructive wall photo viewer", () => {
+  render(
+    <PhotoLightbox
+      photo={photo}
+      hasPrevious={false}
+      hasNext={false}
+      onClose={vi.fn()}
+      onPrevious={vi.fn()}
+      onNext={vi.fn()}
+      t={(key) => labels[key] ?? key}
+      accessToken="token"
+    />,
+  );
+
+  expect(screen.getByRole("button", { name: "loaded-photo" })).toHaveTextContent("preview");
+  expect(screen.queryByRole("button", { name: "common.delete" })).not.toBeInTheDocument();
 });

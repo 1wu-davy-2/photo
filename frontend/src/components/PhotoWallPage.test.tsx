@@ -2,7 +2,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { StrictMode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { savePhotoWallLayout } from "../api/client";
+import { downloadPhoto, savePhotoWallLayout } from "../api/client";
 import { translate } from "../i18n";
 import { PhotoWallPage } from "./PhotoWallPage";
 
@@ -39,6 +39,7 @@ vi.mock("../api/client", () => ({
   getPhotoWall: vi.fn(async () => wall),
   listPhotos: vi.fn(async () => ({ items: [photo], total: 1, page: 1, page_size: 24 })),
   fetchPhotoBlobUrl: vi.fn(async () => "blob:photo"),
+  downloadPhoto: vi.fn(async () => undefined),
   createPhotoWallShare: vi.fn(async () => ({ token: "share-token", path: "/#/share/walls/share-token", is_active: true })),
   createPhotoWall: vi.fn(),
   savePhotoWallLayout: vi.fn(async () => savedWall),
@@ -88,6 +89,28 @@ describe("PhotoWallPage sharing", () => {
       }),
       "token",
     ));
+  });
+
+  it("opens a selected wall photo as a preview without a delete command", async () => {
+    render(<PhotoWallPage t={translate("en-US")} accessToken="token" />);
+
+    await screen.findByLabelText("Background color");
+    fireEvent.click(document.querySelector('[data-wall-item-id="item-1"]') as HTMLElement);
+    fireEvent.click(screen.getByRole("button", { name: "View photo" }));
+
+    expect(await screen.findByRole("dialog", { name: "summer.png" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "View original" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Delete" })).not.toBeInTheDocument();
+  });
+
+  it("downloads the selected wall photo original", async () => {
+    render(<PhotoWallPage t={translate("en-US")} accessToken="token" />);
+
+    await screen.findByLabelText("Background color");
+    fireEvent.click(document.querySelector('[data-wall-item-id="item-1"]') as HTMLElement);
+    fireEvent.click(screen.getByRole("button", { name: "Download original" }));
+
+    await waitFor(() => expect(downloadPhoto).toHaveBeenCalledWith("photo-1", "summer.png", "token"));
   });
 
   it("keeps the selected photo inspector connected after saving draft items", async () => {

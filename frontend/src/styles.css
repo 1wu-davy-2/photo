@@ -366,6 +366,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .wall-item:hover .wall-item-caption, .wall-item.is-selected .wall-item-caption { opacity: 1; }
 .wall-item-remove { position: absolute; top: -11px; right: -11px; display: grid; place-items: center; width: 25px; height: 25px; color: #ffffff; background: var(--danger); border: 2px solid var(--surface); border-radius: 50%; }
 .wall-inspector { display: grid; align-content: start; gap: 13px; }
+.wall-photo-actions { display: grid; gap: 7px; }
+.wall-photo-actions .button { width: 100%; justify-content: flex-start; }
 .inspector-preview { aspect-ratio: 4 / 3; overflow: hidden; background: var(--surface-soft); border-radius: 7px; }
 .inspector-preview img, .inspector-preview .authenticated-image-loading { display: block; width: 100%; height: 100%; min-height: 0; object-fit: cover; }
 .inspector-name { overflow: hidden; color: var(--ink); text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
