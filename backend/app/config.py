@@ -40,6 +40,15 @@ class Settings:
     auth_token_ttl_minutes: int = field(
         default_factory=lambda: max(5, int(os.getenv("AUTH_TOKEN_TTL_MINUTES", "60")))
     )
+    auth_refresh_token_ttl_days: int = field(
+        default_factory=lambda: max(1, int(os.getenv("AUTH_REFRESH_TOKEN_TTL_DAYS", "7")))
+    )
+    auth_refresh_cookie_name: str = field(
+        default_factory=lambda: os.getenv("AUTH_REFRESH_COOKIE_NAME", "lumen_refresh_token")
+    )
+    auth_refresh_cookie_secure: bool = field(
+        default_factory=lambda: _as_bool(os.getenv("AUTH_REFRESH_COOKIE_SECURE"))
+    )
     admin_username: str = field(default_factory=lambda: os.getenv("ADMIN_USERNAME", "admin"))
     admin_password: str = field(default_factory=lambda: os.getenv("ADMIN_PASSWORD", "admin@123"))
     admin_password_hash: str = field(default_factory=lambda: os.getenv("ADMIN_PASSWORD_HASH", ""))

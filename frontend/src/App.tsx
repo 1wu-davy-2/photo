@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { Check, ImagePlus, LoaderCircle, RefreshCw, TriangleAlert } from "lucide-react";
 
-import { createFolder, deletePhoto, listFolders, listPhotos, uploadPhoto } from "./api/client";
-import { clearSession, loadSession, saveSession, type AuthSession } from "./auth/session";
+import { createFolder, deletePhoto, listFolders, listPhotos, logoutSession, refreshSession, uploadPhoto } from "./api/client";
+import { forgetSession, hasRefreshSession, isRefreshDue, loadSession, saveSession, type AuthSession } from "./auth/session";
 import { AuthScreen } from "./components/AuthScreen";
 import { AppShell } from "./components/AppShell";
 import { FilterBar } from "./components/FilterBar";
@@ -217,6 +217,7 @@ function ManagementShell({ session, locale, route, t, onLocaleChange, onNavigate
 
 function App() {
   const [session, setSession] = useState<AuthSession | null>(() => loadSession());
+  const [isRestoringSession, setIsRestoringSession] = useState(() => session === null && hasRefreshSession());
   const [locale, setLocale] = useState<Locale>(() => loadLocale());
   const [theme, setTheme] = useState<ColorTheme>(() => loadTheme());
   const [route, setRoute] = useState<AppRoute>(() => readRoute());
@@ -224,21 +225,91 @@ function App() {
   const t = translate(locale);
   const shareToken = readShareToken();
   const wallId = readWallId();
+  const refreshPromiseRef = useRef<Promise<AuthSession | null> | null>(null);
+  const authEpochRef = useRef(0);
+
+  const renewSession = useCallback(() => {
+    if (refreshPromiseRef.current) return refreshPromiseRef.current;
+    const authEpoch = authEpochRef.current;
+    const operation = refreshSession()
+      .then((nextSession) => {
+        if (authEpoch !== authEpochRef.current) return null;
+        saveSession(nextSession);
+        setSession(nextSession);
+        return nextSession;
+      })
+      .catch(() => {
+        if (authEpoch === authEpochRef.current) {
+          forgetSession();
+          setSession(null);
+        }
+        return null;
+      })
+      .finally(() => {
+        refreshPromiseRef.current = null;
+      });
+    refreshPromiseRef.current = operation;
+    return operation;
+  }, []);
 
   useEffect(() => { const onHashChange = () => setRoute(readRoute()); window.addEventListener("hashchange", onHashChange); return () => window.removeEventListener("hashchange", onHashChange); }, []);
-  useEffect(() => { const handleExpired = () => setSession(null); window.addEventListener("auth-expired", handleExpired); return () => window.removeEventListener("auth-expired", handleExpired); }, []);
-  useEffect(() => { if (!session) return; const timeout = window.setTimeout(() => { clearSession(); setSession(null); }, Math.max(0, session.expiresAt - Date.now())); return () => window.clearTimeout(timeout); }, [session]);
+  useEffect(() => {
+    const handleExpired = () => { void renewSession(); };
+    const handleRefreshed = (event: Event) => {
+      if (hasRefreshSession()) setSession((event as CustomEvent<AuthSession>).detail);
+    };
+    window.addEventListener("auth-expired", handleExpired);
+    window.addEventListener("auth-refreshed", handleRefreshed);
+    return () => {
+      window.removeEventListener("auth-expired", handleExpired);
+      window.removeEventListener("auth-refreshed", handleRefreshed);
+    };
+  }, [renewSession]);
+  useEffect(() => {
+    if (!session && !shareToken && hasRefreshSession()) {
+      setIsRestoringSession(true);
+      void renewSession().finally(() => setIsRestoringSession(false));
+    }
+  }, [renewSession, session, shareToken]);
+  useEffect(() => {
+    if (!session) return;
+    const refreshIfDue = () => {
+      if (isRefreshDue(session)) void renewSession();
+    };
+    const timeout = window.setTimeout(refreshIfDue, Math.max(0, session.refreshAt - Date.now()));
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") refreshIfDue();
+    };
+    window.addEventListener("focus", refreshIfDue);
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => {
+      window.clearTimeout(timeout);
+      window.removeEventListener("focus", refreshIfDue);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, [renewSession, session]);
   useEffect(() => { document.documentElement.dataset.theme = theme; saveTheme(theme); }, [theme]);
 
   const changeLocale = (nextLocale: Locale) => { saveLocale(nextLocale); setLocale(nextLocale); };
   const changeTheme = (nextTheme: ColorTheme) => setTheme(nextTheme);
   const changeRoute = (nextRoute: AppRoute) => { navigate(nextRoute); setRoute(nextRoute); };
-  const logout = () => { clearSession(); setSession(null); changeRoute("home"); };
+  const logout = () => {
+    authEpochRef.current += 1;
+    const pendingRefresh = refreshPromiseRef.current;
+    forgetSession();
+    setIsRestoringSession(false);
+    setSession(null);
+    changeRoute("home");
+    const revokeServerSession = () => logoutSession().catch(() => undefined);
+    if (pendingRefresh) void pendingRefresh.finally(revokeServerSession);
+    else void revokeServerSession();
+  };
   const handleGlobalDrop = (dataTransfer: DataTransfer) => { setPendingDrop(dataTransfer); if (route !== "home") changeRoute("home"); };
   const withGlobalDrop = (content: ReactNode) => route === "home" || route === "manage" ? <><GlobalDropUpload onDrop={handleGlobalDrop} />{content}</> : content;
 
   if (shareToken) return <PhotoWallSharePage token={shareToken} />;
-  if (!session) return <AuthScreen t={t} onAuthenticated={(nextSession) => { saveSession(nextSession); setSession(nextSession); changeRoute("home"); }} />;
+  if (!session && isRestoringSession) return <main className="auth-screen"><div role="status" aria-label={t("auth.checking")}><LoaderCircle className="spin" size={28} /></div></main>;
+  if (!session) return <AuthScreen t={t} onAuthenticated={(nextSession) => { authEpochRef.current += 1; saveSession(nextSession); setSession(nextSession); changeRoute("home"); }} />;
   const isAdmin = session.user.role === "admin";
   if (route === "walls") return withGlobalDrop(<ManagementShell session={session} locale={locale} route={route} t={t} onLocaleChange={changeLocale} onNavigate={changeRoute} onLogout={logout} theme={theme} onThemeChange={changeTheme}><PhotoWallLibraryPage t={t} accessToken={session.accessToken} onCreate={() => navigateToWallEditor(null)} onOpen={(id) => navigateToWallEditor(id)} /></ManagementShell>);
   if (route === "walls-editor") return withGlobalDrop(<ManagementShell session={session} locale={locale} route={route} t={t} onLocaleChange={changeLocale} onNavigate={changeRoute} onLogout={logout} theme={theme} onThemeChange={changeTheme}><PhotoWallPage t={t} accessToken={session.accessToken} wallId={wallId} onBack={() => changeRoute("walls")} /></ManagementShell>);

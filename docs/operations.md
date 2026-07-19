@@ -33,6 +33,9 @@ curl http://127.0.0.1:6222/api/health
 - 修改 `.env` 中的默认数据库和 MinIO 密码。
 - 生产环境必须设置随机 `AUTH_SECRET_KEY`，并使用 `ADMIN_PASSWORD_HASH`，不要使用代码默认值。
 - `CORS_ORIGINS=0.0.0.0` 表示允许跨域来源；认证仍然依赖 Bearer Token。
+- 访问令牌默认有效 60 分钟，前端在剩余 30 分钟时用 HttpOnly Cookie 自动置换；刷新令牌默认有效 7 天并在每次使用后轮换。
+- 当前 HTTP 部署使用 `AUTH_REFRESH_COOKIE_SECURE=false`。配置 HTTPS 后必须改为 `true`，避免刷新 Cookie 通过明文连接发送。
+- 刷新 Cookie 要求前端与 `/api` 同源。当前 Vite 和 Nginx 已代理 `/api`；不要把 `VITE_API_BASE_URL` 改成独立后端域名。若必须跨域部署，应将 `CORS_ORIGINS` 改为明确的前端 HTTPS Origin，并同步调整 Cookie 的 `SameSite`/`Secure` 策略，不能继续使用 `0.0.0.0`。
 
 ## 数据备份
 
@@ -40,13 +43,25 @@ curl http://127.0.0.1:6222/api/health
 
 ## SQL 更新
 
-按版本维护 SQL 文件：`001_initial_schema.sql` 负责新库的 `users` 和 `photos` 表，`002_users_table.sql` 负责已有旧库补建用户表。新字段或索引请新增 `003_*.sql`，不要修改已经执行过的版本文件。默认管理员用户会使用 `INSERT IGNORE` 幂等初始化，不会覆盖已有密码。
+按版本维护 SQL 文件：`001_initial_schema.sql` 负责新库的 `users` 和 `photos` 表，`002_users_table.sql` 负责已有旧库补建用户表，`007_refresh_tokens.sql` 增加刷新令牌表。不要修改已经执行过的版本文件。默认管理员用户会使用 `INSERT IGNORE` 幂等初始化，不会覆盖已有密码。
 
 ## 升级
 
 ```bash
 git pull
+mariadb -h 101.43.75.72 -P 3306 -u root -p photo < backend/sql/007_refresh_tokens.sql
 docker compose up -d --build
+```
+
+MariaDB 命令会交互式询问密码，不要把密码写入命令历史。`007_refresh_tokens.sql` 可重复执行；应用启动时也会通过 SQLAlchemy 为尚未建表的新环境创建该表。
+
+刷新会话相关环境变量：
+
+```dotenv
+AUTH_TOKEN_TTL_MINUTES=60
+AUTH_REFRESH_TOKEN_TTL_DAYS=7
+AUTH_REFRESH_COOKIE_NAME=lumen_refresh_token
+AUTH_REFRESH_COOKIE_SECURE=false
 ```
 
 ## MinIO derivative buckets

@@ -1,12 +1,11 @@
 import type { Folder, ManagedUser, Photo, PhotoListResponse, PhotoWall, PhotoWallShare, SortOrder } from "../types/photo";
-import { clearSession, getAccessToken, type AuthSession } from "../auth/session";
+import { getAccessToken, hasRefreshSession, saveSession, sessionFromTokenResponse, type AuthSession, type TokenResponse } from "../auth/session";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "";
 
 export type PhotoImageVariant = "thumbnail" | "preview" | "original";
 
 function notifyUnauthorized(): void {
-  clearSession();
   window.dispatchEvent(new Event("auth-expired"));
 }
 
@@ -17,8 +16,27 @@ function withAuth(init?: RequestInit, accessToken?: string): RequestInit {
   return { ...init, headers };
 }
 
-async function request<T>(path: string, init?: RequestInit, accessToken?: string): Promise<T> {
+function publishRefreshedSession(nextSession: AuthSession): void {
+  if (!hasRefreshSession()) return;
+  saveSession(nextSession);
+  window.dispatchEvent(new CustomEvent<AuthSession>("auth-refreshed", { detail: nextSession }));
+}
+
+async function authenticatedFetch(path: string, init?: RequestInit, accessToken?: string): Promise<Response> {
   const response = await fetch(`${API_BASE}${path}`, withAuth(init, accessToken));
+  if (response.status !== 401) return response;
+  try {
+    const nextSession = await refreshSession();
+    publishRefreshedSession(nextSession);
+    return fetch(`${API_BASE}${path}`, withAuth(init, nextSession.accessToken));
+  } catch {
+    notifyUnauthorized();
+    return response;
+  }
+}
+
+async function request<T>(path: string, init?: RequestInit, accessToken?: string): Promise<T> {
+  const response = await authenticatedFetch(path, init, accessToken);
   if (response.status === 401) {
     notifyUnauthorized();
     throw new Error("Your session has expired");
@@ -33,6 +51,7 @@ async function request<T>(path: string, init?: RequestInit, accessToken?: string
 export async function login(username: string, password: string): Promise<AuthSession> {
   const response = await fetch(`${API_BASE}/api/auth/login`, {
     method: "POST",
+    credentials: "include",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ username, password }),
   });
@@ -40,12 +59,44 @@ export async function login(username: string, password: string): Promise<AuthSes
     const body = await response.json().catch(() => null);
     throw new Error(body?.detail ?? "Invalid username or password");
   }
-  const body = await response.json();
-  return {
-    accessToken: body.access_token,
-    expiresAt: body.expires_at * 1000,
-    user: body.user,
-  };
+  return sessionFromTokenResponse(await response.json() as TokenResponse);
+}
+
+async function requestRefreshSession(retryConflict: boolean): Promise<AuthSession> {
+  const response = await fetch(`${API_BASE}/api/auth/refresh`, {
+    method: "POST",
+    credentials: "include",
+  });
+  if (response.status === 409 && retryConflict) {
+    const retrySeconds = Math.min(1, Math.max(0.1, Number(response.headers.get("Retry-After")) || 1));
+    await new Promise((resolve) => window.setTimeout(resolve, retrySeconds * 1000));
+    return requestRefreshSession(false);
+  }
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    throw new Error(body?.detail ?? "Your session has expired");
+  }
+  return sessionFromTokenResponse(await response.json() as TokenResponse);
+}
+
+let refreshSessionInFlight: Promise<AuthSession> | null = null;
+
+export function refreshSession(): Promise<AuthSession> {
+  if (refreshSessionInFlight) return refreshSessionInFlight;
+  refreshSessionInFlight = requestRefreshSession(true).finally(() => {
+    refreshSessionInFlight = null;
+  });
+  return refreshSessionInFlight;
+}
+
+export async function logoutSession(): Promise<void> {
+  const response = await fetch(`${API_BASE}/api/auth/logout`, {
+    method: "POST",
+    credentials: "include",
+  });
+  if (!response.ok && response.status !== 401) {
+    throw new Error("Could not end the server session");
+  }
 }
 
 export function listPhotos(search: string, sort: SortOrder, scope: "owned" | "all" = "owned", accessToken?: string): Promise<PhotoListResponse> {
@@ -55,36 +106,50 @@ export function listPhotos(search: string, sort: SortOrder, scope: "owned" | "al
 
 export function uploadPhoto(file: File, onProgress: (progress: number) => void, accessToken?: string, folderId?: string): Promise<Photo> {
   return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    xhr.open("POST", `${API_BASE}/api/photos/upload`);
-    const token = accessToken ?? getAccessToken();
-    if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
-    xhr.responseType = "json";
-    xhr.upload.addEventListener("progress", (event) => {
-      if (event.lengthComputable) onProgress(Math.round((event.loaded / event.total) * 100));
-    });
-    xhr.addEventListener("load", () => {
-      if (xhr.status === 401) {
-        notifyUnauthorized();
-        reject(new Error("Your session has expired"));
-        return;
-      }
-      if (xhr.status >= 200 && xhr.status < 300) {
-        resolve(xhr.response as Photo);
-        return;
-      }
-      reject(new Error(xhr.response?.detail ?? "Upload failed"));
-    });
-    xhr.addEventListener("error", () => reject(new Error("Upload could not reach the archive")));
-    const body = new FormData();
-    body.append("file", file);
-    if (folderId) body.append("folder_id", folderId);
-    xhr.send(body);
+    const attempt = (token: string | null | undefined, retried: boolean) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", `${API_BASE}/api/photos/upload`);
+      if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+      xhr.responseType = "json";
+      xhr.upload.addEventListener("progress", (event) => {
+        if (event.lengthComputable) onProgress(Math.round((event.loaded / event.total) * 100));
+      });
+      xhr.addEventListener("load", () => {
+        if (xhr.status === 401 && !retried) {
+          void refreshSession()
+            .then((nextSession) => {
+              publishRefreshedSession(nextSession);
+              attempt(nextSession.accessToken, true);
+            })
+            .catch(() => {
+              notifyUnauthorized();
+              reject(new Error("Your session has expired"));
+            });
+          return;
+        }
+        if (xhr.status === 401) {
+          notifyUnauthorized();
+          reject(new Error("Your session has expired"));
+          return;
+        }
+        if (xhr.status >= 200 && xhr.status < 300) {
+          resolve(xhr.response as Photo);
+          return;
+        }
+        reject(new Error(xhr.response?.detail ?? "Upload failed"));
+      });
+      xhr.addEventListener("error", () => reject(new Error("Upload could not reach the archive")));
+      const body = new FormData();
+      body.append("file", file);
+      if (folderId) body.append("folder_id", folderId);
+      xhr.send(body);
+    };
+    attempt(accessToken ?? getAccessToken(), false);
   });
 }
 
 export async function deletePhoto(id: string, scope: "owned" | "all" = "owned", accessToken?: string): Promise<void> {
-  const response = await fetch(`${API_BASE}/api/photos/${id}?scope=${scope}`, withAuth({ method: "DELETE" }, accessToken));
+  const response = await authenticatedFetch(`/api/photos/${id}?scope=${scope}`, { method: "DELETE" }, accessToken);
   if (response.status === 401) {
     notifyUnauthorized();
     throw new Error("Your session has expired");
@@ -105,7 +170,7 @@ export function updateUser(id: string, payload: { role?: "admin" | "user"; is_ac
 }
 
 export async function deleteUser(id: string, accessToken?: string): Promise<void> {
-  const response = await fetch(`${API_BASE}/api/users/${id}`, withAuth({ method: "DELETE" }, accessToken));
+  const response = await authenticatedFetch(`/api/users/${id}`, { method: "DELETE" }, accessToken);
   if (response.status === 401) { notifyUnauthorized(); throw new Error("Your session has expired"); }
   if (!response.ok) throw new Error((await response.json().catch(() => null))?.detail ?? "Could not delete the user");
 }
@@ -123,7 +188,7 @@ export function renameFolder(id: string, name: string, accessToken?: string): Pr
 }
 
 export async function deleteFolder(id: string, accessToken?: string): Promise<void> {
-  const response = await fetch(`${API_BASE}/api/folders/${id}`, withAuth({ method: "DELETE" }, accessToken));
+  const response = await authenticatedFetch(`/api/folders/${id}`, { method: "DELETE" }, accessToken);
   if (response.status === 401) { notifyUnauthorized(); throw new Error("Your session has expired"); }
   if (!response.ok) throw new Error((await response.json().catch(() => null))?.detail ?? "Could not delete the folder");
 }
@@ -137,7 +202,7 @@ export function renamePhoto(id: string, name: string, accessToken?: string): Pro
 }
 
 async function fetchBlobUrl(path: string, signal?: AbortSignal, accessToken?: string): Promise<string> {
-  const response = await fetch(`${API_BASE}${path}`, withAuth({ signal }, accessToken));
+  const response = await authenticatedFetch(path, { signal }, accessToken);
   if (response.status === 401) {
     notifyUnauthorized();
     throw new Error("Your session has expired");
